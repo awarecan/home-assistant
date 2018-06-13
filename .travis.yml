@@ -3,6 +3,7 @@ addons:
   apt:
     packages:
       - libudev-dev
+      - python-gi
 matrix:
   fast_finish: true
   include:

@@ -785,6 +785,9 @@ pycsspeechtts==1.0.2
 # homeassistant.components.climate.daikin
 pydaikin==0.4
 
+# homeassistant.components.binary_sensor.systemd
+pydbus==0.6.0
+
 # homeassistant.components.deconz
 pydeconz==38
 
