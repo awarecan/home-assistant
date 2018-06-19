@@ -1,7 +1,8 @@
 sudo: false
 addons:
   apt:
-    sourceline: "ppa:ubuntu/xenial"
+    sources:
+      - sourceline: "ppa:ubuntu/xenial"
     packages:
       - libudev-dev
       - libcairo2-dev
