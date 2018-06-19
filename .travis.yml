@@ -4,7 +4,7 @@ addons:
     sources:
       - sourceline: "deb https://packages.chef.io/repos/apt/stable xenial main"
       - sourceline: "deb https://packages.chef.io/repos/apt/current xenial main"
-      key_url: "https://packages.chef.io/chef.asc"
+    key_url: "https://packages.chef.io/chef.asc"
     packages:
       - libudev-dev
       - libcairo2-dev
