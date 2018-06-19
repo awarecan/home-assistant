@@ -1,6 +1,7 @@
 sudo: false
 addons:
   apt:
+    update: ture
     packages:
       - libudev-dev
       - libcairo2-dev
