@@ -5,7 +5,7 @@ addons:
     packages:
       - libudev-dev
       - libcairo2-dev
-      - libgirepository1.0-dev-1.46
+      - libgirepository1.0-dev.1.46
 matrix:
   fast_finish: true
   include:
