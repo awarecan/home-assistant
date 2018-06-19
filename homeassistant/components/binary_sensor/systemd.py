@@ -16,6 +16,7 @@ from homeassistant.const import EVENT_HOMEASSISTANT_STOP, \
 from homeassistant.core import callback
 
 REQUIREMENTS = ['pydbus==0.6.0']
+REQUIREMENTS = ['PyGObject==3.28.3']
 
 _LOGGER = logging.getLogger(__name__)
 

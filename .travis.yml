@@ -3,7 +3,8 @@ addons:
   apt:
     packages:
       - libudev-dev
-      - python-gi
+      - libcairo2-dev
+      - libgirepository1.0-dev
 matrix:
   fast_finish: true
   include:
