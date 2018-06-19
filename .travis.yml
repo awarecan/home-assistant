@@ -1,11 +1,11 @@
 sudo: false
 addons:
   apt:
-    sourceline: ppa:ubuntu/xenial
+    sourceline: "ppa:ubuntu/xenial"
     packages:
       - libudev-dev
       - libcairo2-dev
-      - libgirepository1.0-dev.1.46
+      - libgirepository1.0-dev
 matrix:
   fast_finish: true
   include:
