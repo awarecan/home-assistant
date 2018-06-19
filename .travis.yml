@@ -1,7 +1,7 @@
 sudo: false
 addons:
   apt:
-    update: ture
+    sourceline: ppa:ubuntu/xenial
     packages:
       - libudev-dev
       - libcairo2-dev
