@@ -2,7 +2,7 @@ sudo: false
 addons:
   apt:
     sources:
-      - sourceline: "ppa:ubuntu/xenial"
+      - sourceline: "deb https://packages.chef.io/repos/apt/current xenial main"
     packages:
       - libudev-dev
       - libcairo2-dev
