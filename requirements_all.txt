@@ -788,6 +788,9 @@ pycsspeechtts==1.0.2
 # homeassistant.components.climate.daikin
 pydaikin==0.4
 
+# homeassistant.components.binary_sensor.systemd
+pydbus==0.6.0
+
 # homeassistant.components.deconz
 pydeconz==38
 
@@ -796,9 +799,6 @@ pydispatcher==2.0.5
 
 # homeassistant.components.android_ip_webcam
 pydroid-ipcam==0.8
-
-# homeassistant.components.binary_sensor.systemd
-pydbus==0.6.0
 
 # homeassistant.components.sensor.ebox
 pyebox==1.1.4
