@@ -1,14 +1,14 @@
 sudo: false
 addons:
   apt:
+    update: true
     sources:
-      - sourceline: "deb https://packages.chef.io/repos/apt/stable xenial main"
-      - sourceline: "deb https://packages.chef.io/repos/apt/current xenial main"
-    key_url: "https://packages.chef.io/chef.asc"
+      - sourceline: "ppa:jonathonf/gtk3.18"
     packages:
       - libudev-dev
-      - libcairo2-dev
-      - libgirepository1.0-dev
+      - libcairo2-dev=1.14.6-1~ubuntu14.04.1york0
+      - libgirepository1.0-dev=1.46.0-3ubuntu1~ubuntu14.04.1york0
+
 matrix:
   fast_finish: true
   include:
