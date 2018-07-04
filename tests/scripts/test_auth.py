@@ -5,21 +5,26 @@ import pytest
 
 from homeassistant.scripts import auth as script_auth
 from homeassistant.auth_providers import homeassistant as hass_auth
+from homeassistant.auth_providers.modules import totp as hass_auth_tfa
 
 
 @pytest.fixture
-def data(hass):
+def enabled_2fa():
+    """Control whether enable two factor auth."""
+    return False
+
+
+@pytest.fixture
+def data(hass, enabled_2fa):
     """Create a loaded data class."""
     data = hass_auth.Data(hass)
     hass.loop.run_until_complete(data.async_load())
-    return data
+    if enabled_2fa:
+        tfa_module = hass_auth_tfa.TotpAuthModule(
+            hass, None, {'type': 'totp', 'id': 'totp'})
+        hass.loop.run_until_complete(tfa_module.async_load())
+        setattr(data, 'tfa_module', tfa_module)
 
-
-@pytest.fixture
-def data_2fa(hass):
-    """Create a loaded data class."""
-    data = hass_auth.Data(hass, True)
-    hass.loop.run_until_complete(data.async_load())
     return data
 
 
@@ -44,7 +49,7 @@ async def test_list_user(data, capsys):
 async def test_add_user(data, capsys, hass_storage):
     """Test we can add a user."""
     await script_auth.add_user(
-        data, Mock(username='paulus', password='test-pass'))
+        data, Mock(username='paulus', password='test-pass', tfa=False))
 
     assert len(hass_storage[hass_auth.STORAGE_KEY]['data']['users']) == 1
 
@@ -55,25 +60,21 @@ async def test_add_user(data, capsys, hass_storage):
     data.validate_login('paulus', 'test-pass')
 
 
-async def test_add_user_2fa(data_2fa, capsys, hass_storage):
+@pytest.mark.parametrize('enabled_2fa', [True])
+async def test_add_user_2fa(data, capsys, hass_storage):
     """Test we can add a user wiht 2fa enabled."""
     await script_auth.add_user(
-        data_2fa, Mock(username='paulus', password='test-pass'))
+        data, Mock(username='paulus', password='test-pass', tfa=True))
 
     assert len(hass_storage[hass_auth.STORAGE_KEY]['data']['users']) == 1
+    assert len(hass_storage[hass_auth_tfa.STORAGE_KEY]['data']['users']) == 1
 
     captured = capsys.readouterr()
     assert captured.out.startswith('User created, please set up Google '
                                    'Authenticator or any other compatible apps'
                                    ' like Authy with key: ')
 
-    assert len(data_2fa.users) == 1
-    try:
-        data_2fa.validate_login('paulus', 'test-pass')
-        pytest.fail('Shall raise Request2FA')
-    except hass_auth.Request2FA as r:
-        with patch('pyotp.TOTP.verify', return_value=True):
-            data_2fa.validate_2fa(r.session_token, 'code')
+    assert len(data.users) == 1
 
 
 async def test_validate_login(data, capsys):
@@ -81,50 +82,52 @@ async def test_validate_login(data, capsys):
     data.add_user('test-user', 'test-pass')
 
     await script_auth.validate_login(
-        data, Mock(username='test-user', password='test-pass'))
+        data, Mock(username='test-user', password='test-pass', tfa=False))
     captured = capsys.readouterr()
     assert captured.out == 'Auth valid\n'
 
     await script_auth.validate_login(
-        data, Mock(username='test-user', password='invalid-pass'))
+        data, Mock(username='test-user', password='invalid-pass', tfa=False))
     captured = capsys.readouterr()
     assert captured.out == 'Auth invalid\n'
 
     await script_auth.validate_login(
-        data, Mock(username='invalid-user', password='test-pass'))
+        data, Mock(username='invalid-user', password='test-pass', tfa=False))
     captured = capsys.readouterr()
     assert captured.out == 'Auth invalid\n'
 
 
-async def test_validate_login_2fa(data_2fa, capsys):
+@pytest.mark.parametrize('enabled_2fa', [True])
+async def test_validate_login_2fa(data, capsys):
     """Test we can validate a user login."""
-    data_2fa.add_user('test-user', 'test-pass')
+    data.add_user('test-user', 'test-pass')
+    data.tfa_module.add_ota_secret('test-user')
 
     with patch('pyotp.TOTP.verify', return_value=True):
         await script_auth.validate_login(
-            data_2fa, Mock(username='test-user',
-                           password='test-pass', code='code'))
+            data, Mock(username='test-user', password='test-pass',
+                       tfa=True, code='code'))
         captured = capsys.readouterr()
         assert captured.out == 'Auth valid\n'
 
     with patch('pyotp.TOTP.verify', return_value=True):
         await script_auth.validate_login(
-            data_2fa, Mock(username='test-user',
-                           password='invalid-pass', code='code'))
+            data, Mock(username='test-user', password='invalid-pass',
+                       tfa=True, code='code'))
         captured = capsys.readouterr()
         assert captured.out == 'Auth invalid\n'
 
     with patch('pyotp.TOTP.verify', return_value=True):
         await script_auth.validate_login(
-            data_2fa, Mock(username='invalid-user',
-                           password='test-pass', code='code'))
+            data, Mock(username='invalid-user', password='test-pass',
+                       tfa=True, code='code'))
         captured = capsys.readouterr()
         assert captured.out == 'Auth invalid\n'
 
     with patch('pyotp.TOTP.verify', return_value=False):
         await script_auth.validate_login(
-            data_2fa, Mock(username='test-user',
-                           password='test-pass', code='invalid-code'))
+            data, Mock(username='test-user', password='test-pass',
+                       tfa=True, code='invalid-code'))
         captured = capsys.readouterr()
         assert captured.out == 'Auth invalid\n'
 

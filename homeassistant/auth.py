@@ -4,6 +4,7 @@ import binascii
 import importlib
 import logging
 import os
+import types
 import uuid
 from collections import OrderedDict
 from datetime import datetime, timedelta
@@ -15,6 +16,8 @@ from voluptuous.humanize import humanize_error
 from homeassistant import data_entry_flow, requirements
 from homeassistant.const import CONF_TYPE, CONF_NAME, CONF_ID
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 from homeassistant.util.decorator import Registry
 
@@ -23,6 +26,17 @@ _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 STORAGE_KEY = 'auth'
 
+CONF_MODULES = 'modules'
+
+AUTH_MODULES = Registry()
+
+AUTH_MODULE_SCHEMA = vol.Schema({
+    vol.Required(CONF_TYPE): str,
+    vol.Optional(CONF_NAME): str,
+    # Specify ID if you have two auth module for same type.
+    vol.Optional(CONF_ID): str,
+}, extra=vol.ALLOW_EXTRA)
+
 AUTH_PROVIDERS = Registry()
 
 AUTH_PROVIDER_SCHEMA = vol.Schema({
@@ -30,10 +44,16 @@ AUTH_PROVIDER_SCHEMA = vol.Schema({
     vol.Optional(CONF_NAME): str,
     # Specify ID if you have two auth providers for same type.
     vol.Optional(CONF_ID): str,
+    vol.Optional(CONF_MODULES):
+        vol.All(cv.ensure_list, [AUTH_MODULE_SCHEMA])
 }, extra=vol.ALLOW_EXTRA)
 
+
 ACCESS_TOKEN_EXPIRATION = timedelta(minutes=30)
+VALIDATION_SESSION_EXPIRATION = timedelta(minutes=5)
 DATA_REQS = 'auth_reqs_processed'
+
+SESSION_EXPIRATION = timedelta(minutes=5)
 
 
 def generate_secret(entropy: int = 32) -> str:
@@ -44,6 +64,151 @@ def generate_secret(entropy: int = 32) -> str:
     Event loop friendly.
     """
     return binascii.hexlify(os.urandom(entropy)).decode('ascii')
+
+
+class InvalidAuth(HomeAssistantError):
+    """Raised when we encounter invalid authentication."""
+
+
+class SessionStore:
+    """Stores auth module sessions in memory.
+
+    Internal storage of sessions is a Dict with session_id as key, and
+     (data, expire_time) as value.
+    """
+
+    def __init__(self, hass):
+        """Initialize the auth store."""
+        self.hass = hass
+        self._sessions = None
+
+    async def async_load(self):
+        """Load sessions.
+
+        Lazy load SessionStore, can be extend to support persistent storage
+         in future.
+        """
+        self._sessions = {}
+        return
+
+    async def async_save(self):
+        """Save sessions.
+
+        Can be extend to support persistent storage in future.
+        """
+        return
+
+    async def async_get_session(self, session_id):
+        """Retrieve a session by id."""
+        if self._sessions is None:
+            await self.async_load()
+
+        # first clean up expired sessions
+        await self.async_cleanup_session()
+
+        session = self._sessions.get(session_id)
+        return session[0] if session is not None else None
+
+    async def async_open_session(self, data):
+        """Create a session."""
+        if self._sessions is None:
+            await self.async_load()
+
+        # first clean up expired sessions
+        await self.async_cleanup_session()
+
+        session_id = generate_secret(64)
+        expire_time = dt_util.utcnow() + SESSION_EXPIRATION
+        self._sessions[session_id] = (data, expire_time.isoformat())
+
+        await self.async_save()
+        return session_id
+
+    async def async_close_session(self, session_id):
+        """Close a session.
+
+        Return None if session is not exist or expired
+        """
+        if self._sessions is None:
+            await self.async_load()
+
+        data = None
+        session = self._sessions.get(session_id)
+        if session is not None:
+            data = session[0]
+            del self._sessions[session_id]
+        # clean up expired sessions
+        await self.async_cleanup_session()
+        await self.async_save()
+        return data
+
+    async def async_cleanup_session(self):
+        """Clean up expired sessions."""
+        for session_id in list(self._sessions.keys()):
+            _, expire_time = self._sessions[session_id]
+            if dt_util.utcnow() > dt_util.parse_datetime(expire_time):
+                del self._sessions[session_id]
+
+
+class AuthModule:
+    """Provider of validation function."""
+
+    DEFAULT_TITLE = 'Unnamed auth module'
+
+    initialized = False
+
+    def __init__(self, hass, store, config):
+        """Initialize an auth module."""
+        self.hass = hass
+        self.store = store or SessionStore(hass)
+        self.config = config
+        _LOGGER.debug('auth module %s loaded.',
+                      self.type if self.id is None else "{}[{}]".format(
+                          self.type, self.id
+                      ))
+
+    @property
+    def id(self):  # pylint: disable=invalid-name
+        """Return id of the auth module.
+
+        Optional, can be None.
+        """
+        return self.config.get(CONF_ID)
+
+    @property
+    def type(self):
+        """Return type of the module."""
+        return self.config[CONF_TYPE]
+
+    @property
+    def name(self):
+        """Return the name of the auth module."""
+        return self.config.get(CONF_NAME, self.DEFAULT_TITLE)
+
+    @property
+    def input_schema(self):
+        """Return the input schema of the auth module."""
+        raise NotImplementedError
+
+    async def async_create_session(self, data):
+        """Create a validation session."""
+        return await self.store.async_open_session(data)
+
+    async def async_get_session(self, session_id):
+        """Create a validation session."""
+        return await self.store.async_get_session(session_id)
+
+    # Implement by extending class
+
+    async def async_initialize(self):
+        """Initialize the auth module.
+
+        Optional.
+        """
+
+    async def async_validation_flow(self, data, user_input):
+        """Return the data flow for validation with auth module."""
+        raise NotImplementedError
 
 
 class AuthProvider:
@@ -58,6 +223,7 @@ class AuthProvider:
         self.hass = hass
         self.store = store
         self.config = config
+        self.modules = OrderedDict()
 
     @property
     def id(self):  # pylint: disable=invalid-name
@@ -76,6 +242,35 @@ class AuthProvider:
     def name(self):
         """Return the name of the auth provider."""
         return self.config.get(CONF_NAME, self.DEFAULT_TITLE)
+
+    async def load_modules(self, moudle_configs):
+        """Load auth modules."""
+        if moudle_configs:
+            modules = await asyncio.gather(
+                *[_auth_module_from_config(self.hass, None, config)
+                  for config in moudle_configs])
+        else:
+            modules = []
+        # So returned auth modules are in same order as config
+        module_hash = OrderedDict()
+        for module in modules:
+            if module is None:
+                continue
+
+            key = (module.type, module.id)
+
+            if key in module_hash:
+                _LOGGER.error(
+                    'Found duplicate auth module: %s. Please add unique IDs'
+                    ' if you want to have the same auth module twice.', key)
+                continue
+
+            if not module.initialized:
+                module.initialized = True
+                await module.async_initialize()
+
+            module_hash[key] = module
+        return module_hash
 
     async def async_credentials(self):
         """Return all credentials of this provider."""
@@ -97,17 +292,18 @@ class AuthProvider:
             data=data,
         )
 
+    async def async_initialize(self):
+        """Initialize the auth provider."""
+        self.modules = await self.load_modules(self.config.get(CONF_MODULES))
+
     # Implement by extending class
 
-    async def async_initialize(self):
-        """Initialize the auth provider.
+    async def async_login_flow(self):
+        """Return the data flow for logging in with auth provider.
 
-        Optional.
+        Auth provider should extend LoginFlow
         """
-
-    async def async_credential_flow(self):
-        """Return the data flow for logging in with auth provider."""
-        raise NotImplementedError
+        return LoginFlow(self)
 
     async def async_get_or_create_credentials(self, flow_result):
         """Get credentials based on the flow result."""
@@ -119,6 +315,79 @@ class AuthProvider:
         Will be used to populate info when creating a new user.
         """
         return {}
+
+
+class LoginFlow(data_entry_flow.FlowHandler):
+    """Handler for the login flow."""
+
+    def __init__(self, auth_provider):
+        """Initialize the login flow."""
+        self._auth_provider = auth_provider
+        # self._auth_modules is mutable, we need a copy
+        self._auth_modules = auth_provider.modules.copy()
+        self._data = dict()
+
+    async def async_step_init(self, user_input=None):
+        """Handle the first step of login flow.
+
+        Return self.async_show_form(step_id='init') if user_input == None.
+        Return next auth_module validation step if login init step pass.
+        Return self.async_create_entry(data={'username':username}) if login
+          init step pass and no auth_module loaded
+        """
+        raise NotImplementedError
+
+    async def async_finish(self, username):
+        """Handle the pass of login flow."""
+        if len(self._auth_modules) > 0:
+            _, auth_module = self._auth_modules.popitem(False)
+
+            step_id = 'auth_module_' + auth_module.type
+            if auth_module.id is not None:
+                step_id += '_' + auth_module.id
+            step_method_name = 'async_step_' + step_id
+
+            async def step(self, user_input=None):
+                """Handle the step of validation."""
+                errors = {}
+                result = None
+
+                if user_input is not None:
+                    try:
+                        result = await auth_module.async_validation_flow(
+                            self._data.get(step_id), user_input)
+                    except InvalidAuth:
+                        errors['base'] = 'invalid_auth'
+
+                    if not errors and result:
+                        return await self.async_finish(result)
+                else:
+                    session_id = await auth_module.\
+                        async_create_session({'username': username})
+                    if session_id is None:
+                        _LOGGER.debug("Create validation session failed in "
+                                      " %s, ignore it", auth_module.type)
+                        return await self.async_finish(result)
+                    self._data[step_id] = session_id
+
+                return self.async_show_form(
+                    step_id=step_id,
+                    data_schema=vol.Schema(auth_module.input_schema),
+                    errors=errors,
+                )
+
+            step.__name__ = step_method_name
+            step.__doc__ = "Handle the step of auth module {} validate.".\
+                format(auth_module.type)
+            # bind step() as self.async_step_auth_module_{auth_module.type}()
+            setattr(self, step_method_name, types.MethodType(step, self))
+
+            return await getattr(self, step_method_name)()
+        else:
+            return self.async_create_entry(
+                title=self._auth_provider.name,
+                data={'username': username}
+            )
 
 
 @attr.s(slots=True)
@@ -186,13 +455,21 @@ class Credentials:
     is_new = attr.ib(type=bool, default=True)
 
 
-async def load_auth_provider_module(hass, provider):
+async def load_module(hass, module_name, module_type):
     """Load an auth provider."""
+    if module_type == 'auth provider':
+        module_path = 'homeassistant.auth_providers.{}'.format(module_name)
+    elif module_type == 'auth module':
+        module_path = 'homeassistant.auth_providers.modules.{}'.\
+            format(module_name)
+    else:
+        raise ValueError('Parameter type has to be "auth provider"'
+                         ' or "auth module".')
+
     try:
-        module = importlib.import_module(
-            'homeassistant.auth_providers.{}'.format(provider))
+        module = importlib.import_module(module_path)
     except ImportError:
-        _LOGGER.warning('Unable to find auth provider %s', provider)
+        _LOGGER.warning('Unable to find %s %s', module_type, module_name)
         return None
 
     if hass.config.skip_pip or not hasattr(module, 'REQUIREMENTS'):
@@ -202,11 +479,11 @@ async def load_auth_provider_module(hass, provider):
 
     if processed is None:
         processed = hass.data[DATA_REQS] = set()
-    elif provider in processed:
+    elif module_name in processed:
         return module
 
     req_success = await requirements.async_process_requirements(
-        hass, 'auth provider {}'.format(provider), module.REQUIREMENTS)
+        hass, '{} {}'.format(module_type, module_name), module.REQUIREMENTS)
 
     if not req_success:
         return None
@@ -245,7 +522,7 @@ async def auth_manager_from_config(hass, provider_configs):
 async def _auth_provider_from_config(hass, store, config):
     """Initialize an auth provider from a config."""
     provider_name = config[CONF_TYPE]
-    module = await load_auth_provider_module(hass, provider_name)
+    module = await load_module(hass, provider_name, 'auth provider')
 
     if module is None:
         return None
@@ -258,6 +535,24 @@ async def _auth_provider_from_config(hass, store, config):
         return None
 
     return AUTH_PROVIDERS[provider_name](hass, store, config)
+
+
+async def _auth_module_from_config(hass, store, config):
+    """Initialize an auth module from a config."""
+    module_name = config[CONF_TYPE]
+    module = await load_module(hass, module_name, 'auth module')
+
+    if module is None:
+        return None
+
+    try:
+        config = module.CONFIG_SCHEMA(config)
+    except vol.Invalid as err:
+        _LOGGER.error('Invalid configuration for auth module %s: %s',
+                      module_name, humanize_error(config, err))
+        return None
+
+    return AUTH_MODULES[module_name](hass, store, config)
 
 
 class AuthManager:
@@ -391,7 +686,8 @@ class AuthManager:
             auth_provider.initialized = True
             await auth_provider.async_initialize()
 
-        return await auth_provider.async_credential_flow()
+        login_flow = await auth_provider.async_login_flow()
+        return login_flow
 
     async def _async_finish_login_flow(self, result):
         """Result of a credential login flow."""

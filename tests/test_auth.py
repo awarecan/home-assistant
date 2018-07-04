@@ -1,5 +1,5 @@
 """Tests for the Home Assistant auth module."""
-from datetime import timedelta
+from datetime import timedelta, datetime
 from unittest.mock import Mock, patch
 
 import pytest
@@ -56,7 +56,78 @@ async def test_auth_manager_from_config_validates_config_and_id(mock_hass):
     }]
 
 
-async def test_create_new_user(hass, hass_storage):
+async def test_auth_manager_from_config_auth_modules(mock_hass):
+    """Test get auth modules."""
+    manager = await auth.auth_manager_from_config(mock_hass, [{
+        'name': 'Test Name',
+        'type': 'insecure_example',
+        'modules': [{
+            'type': 'insecure_example',
+            'users': [],
+        }],
+        'users': [],
+    }, {
+        'name': 'Duplicate modules',
+        'type': 'insecure_example',
+        'modules': [{
+            'type': 'insecure_example',
+            'users': [],
+        }, {
+            'type': 'insecure_example',
+            'users': [],
+        }],
+        'id': 'duplicate',
+        'users': [],
+    }, {
+        'name': 'Test Name 2',
+        'type': 'insecure_example',
+        'modules': [{
+            'type': 'insecure_example',
+            'id': 't1',
+            'users': [],
+        }, {
+            'type': 'insecure_example',
+            'id': 't2',
+            'users': [],
+        }],
+        'id': 'another',
+        'users': [],
+    }])
+
+    # auth module is lazy loaded
+    for provider in manager.async_auth_providers:
+        assert len(provider.modules) == 0
+        await provider.async_initialize()
+
+    providers = [{
+            'name': provider.name,
+            'type': provider.type,
+            'id': provider.id,
+            'modules': [{
+                'id': module.id,
+                'type': module.type,
+            } for module in provider.modules.values()]
+        } for provider in manager.async_auth_providers]
+    assert providers == [{
+        'name': 'Test Name',
+        'type': 'insecure_example',
+        'id': None,
+        'modules': [{'id': None, 'type': 'insecure_example'}]
+    }, {
+        'name': 'Duplicate modules',
+        'type': 'insecure_example',
+        'id': 'duplicate',
+        'modules': [{'id': None, 'type': 'insecure_example'}]
+    }, {
+        'name': 'Test Name 2',
+        'type': 'insecure_example',
+        'id': 'another',
+        'modules': [{'id': 't1', 'type': 'insecure_example'},
+                    {'id': 't2', 'type': 'insecure_example'}]
+    }]
+
+
+async def test_create_new_user(hass):
     """Test creating new user."""
     manager = await auth.auth_manager_from_config(hass, [{
         'type': 'insecure_example',
@@ -286,3 +357,193 @@ async def test_refresh_token_not_requires_client_for_system_user(hass):
     token = await manager.async_create_refresh_token(user)
     assert token is not None
     assert token.client_id is None
+
+
+async def test_login_with_auth_module(mock_hass):
+    """Test login as existing user with auth module."""
+    manager = await auth.auth_manager_from_config(mock_hass, [{
+        'type': 'insecure_example',
+        'users': [{
+            'username': 'test-user',
+            'password': 'test-pass',
+            'name': 'Test Name'
+        }],
+        'modules': [{
+            'type': 'insecure_example',
+            'users': [{
+                'username': 'test-user',
+                'pin': 'test-pin'
+            }]
+        }]
+    }])
+    ensure_auth_manager_loaded(manager)
+
+    # Add fake user with credentials for example auth provider.
+    user = MockUser(
+        id='mock-user',
+        is_owner=False,
+        is_active=False,
+        name='Paulus',
+    ).add_to_auth_manager(manager)
+    user.credentials.append(auth.Credentials(
+        id='mock-id',
+        auth_provider_type='insecure_example',
+        auth_provider_id=None,
+        data={'username': 'test-user'},
+        is_new=False,
+    ))
+
+    step = await manager.login_flow.async_init(('insecure_example', None))
+    assert step['type'] == data_entry_flow.RESULT_TYPE_FORM
+
+    step = await manager.login_flow.async_configure(step['flow_id'], {
+        'username': 'test-user',
+        'password': 'test-pass',
+    })
+
+    # After auth_provider validated, request auth module input form
+    assert step['type'] == data_entry_flow.RESULT_TYPE_FORM
+    assert step['step_id'] == 'auth_module_insecure_example'
+
+    step = await manager.login_flow.async_configure(step['flow_id'], {
+        'pin': 'invalid-pin',
+    })
+
+    # Invalid auth error
+    assert step['type'] == data_entry_flow.RESULT_TYPE_FORM
+    assert step['step_id'] == 'auth_module_insecure_example'
+    assert step['errors'] == {'base': 'invalid_auth'}
+
+    step = await manager.login_flow.async_configure(step['flow_id'], {
+        'pin': 'test-pin',
+    })
+
+    # Finally passed, get credentials (username)
+    assert step['type'] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    credentials = step['result']
+
+    user = await manager.async_get_or_create_user(credentials)
+    assert user is not None
+    assert user.id == 'mock-user'
+    assert user.is_owner is False
+    assert user.is_active is False
+    assert user.name == 'Paulus'
+
+
+async def test_login_with_multi_auth_module(mock_hass):
+    """Test login as existing user with multiple auth modules."""
+    manager = await auth.auth_manager_from_config(mock_hass, [{
+        'type': 'insecure_example',
+        'users': [{
+            'username': 'test-user',
+            'password': 'test-pass',
+            'name': 'Test Name'
+        }],
+        'modules': [{
+            'type': 'insecure_example',
+            'users': [{
+                'username': 'test-user',
+                'pin': 'test-pin'
+            }]
+        }, {
+            'type': 'insecure_example',
+            'id': 'module2',
+            'users': [{
+                'username': 'test-user',
+                'pin': 'test-pin2'
+            }]
+        }]
+    }])
+    ensure_auth_manager_loaded(manager)
+
+    # Add fake user with credentials for example auth provider.
+    user = MockUser(
+        id='mock-user',
+        is_owner=False,
+        is_active=False,
+        name='Paulus',
+    ).add_to_auth_manager(manager)
+    user.credentials.append(auth.Credentials(
+        id='mock-id',
+        auth_provider_type='insecure_example',
+        auth_provider_id=None,
+        data={'username': 'test-user'},
+        is_new=False,
+    ))
+
+    step = await manager.login_flow.async_init(('insecure_example', None))
+    assert step['type'] == data_entry_flow.RESULT_TYPE_FORM
+
+    step = await manager.login_flow.async_configure(step['flow_id'], {
+        'username': 'test-user',
+        'password': 'test-pass',
+    })
+
+    # After auth_provider validated, request first auth module input form
+    assert step['type'] == data_entry_flow.RESULT_TYPE_FORM
+    assert step['step_id'] == 'auth_module_insecure_example'
+
+    step = await manager.login_flow.async_configure(step['flow_id'], {
+        'pin': 'test-pin',
+    })
+
+    # Request second auth module input form, step_id included module.id
+    assert step['type'] == data_entry_flow.RESULT_TYPE_FORM
+    assert step['step_id'] == 'auth_module_insecure_example_module2'
+
+    step = await manager.login_flow.async_configure(step['flow_id'], {
+        'pin': 'test-pin2',
+    })
+
+    # Finally passed, get credentials (username)
+    assert step['type'] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
+    credentials = step['result']
+
+    user = await manager.async_get_or_create_user(credentials)
+    assert user is not None
+    assert user.id == 'mock-user'
+    assert user.is_owner is False
+    assert user.is_active is False
+    assert user.name == 'Paulus'
+
+
+async def test_auth_module_expired_session(mock_hass):
+    """Test login as existing user."""
+    manager = await auth.auth_manager_from_config(mock_hass, [{
+        'type': 'insecure_example',
+        'users': [{
+            'username': 'test-user',
+            'password': 'test-pass',
+            'name': 'Test Name'
+        }],
+        'modules': [{
+            'type': 'insecure_example',
+            'users': [{
+                'username': 'test-user',
+                'pin': 'test-pin'
+            }]
+        }]
+    }])
+    ensure_auth_manager_loaded(manager)
+
+    step = await manager.login_flow.async_init(('insecure_example', None))
+    assert step['type'] == data_entry_flow.RESULT_TYPE_FORM
+
+    step = await manager.login_flow.async_configure(step['flow_id'], {
+        'username': 'test-user',
+        'password': 'test-pass',
+    })
+
+    assert step['type'] == data_entry_flow.RESULT_TYPE_FORM
+    assert step['step_id'] == 'auth_module_insecure_example'
+
+    with patch('homeassistant.util.dt.utcnow') as mock_now:
+        mock_now.return_value = datetime.now(dt_util.UTC)\
+                                + auth.SESSION_EXPIRATION * 2
+        step = await manager.login_flow.async_configure(step['flow_id'], {
+            'pin': 'test-pin',
+        })
+        # Invalid auth due session timeout
+        assert step['type'] == data_entry_flow.RESULT_TYPE_FORM
+        assert step['step_id'] == 'auth_module_insecure_example'
+        assert step['errors']['base'] == 'invalid_auth'

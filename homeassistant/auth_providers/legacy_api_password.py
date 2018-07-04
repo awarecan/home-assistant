@@ -3,14 +3,14 @@ Support Legacy API password auth provider.
 
 It will be removed when auth system production ready
 """
-from collections import OrderedDict
 import hmac
+from collections import OrderedDict
 
 import voluptuous as vol
 
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant import auth, data_entry_flow
+from homeassistant import auth
 from homeassistant.core import callback
+from homeassistant.exceptions import HomeAssistantError
 
 USER_SCHEMA = vol.Schema({
     vol.Required('username'): str,
@@ -33,7 +33,7 @@ class LegacyApiPasswordAuthProvider(auth.AuthProvider):
 
     DEFAULT_TITLE = 'Legacy API Password'
 
-    async def async_credential_flow(self):
+    async def async_login_flow(self):
         """Return a flow to login."""
         return LoginFlow(self)
 
@@ -70,12 +70,8 @@ class LegacyApiPasswordAuthProvider(auth.AuthProvider):
         return {'name': LEGACY_USER}
 
 
-class LoginFlow(data_entry_flow.FlowHandler):
+class LoginFlow(auth.LoginFlow):
     """Handler for the login flow."""
-
-    def __init__(self, auth_provider):
-        """Initialize the login flow."""
-        self._auth_provider = auth_provider
 
     async def async_step_init(self, user_input=None):
         """Handle the step of the form."""
@@ -89,10 +85,7 @@ class LoginFlow(data_entry_flow.FlowHandler):
                 errors['base'] = 'invalid_auth'
 
             if not errors:
-                return self.async_create_entry(
-                    title=self._auth_provider.name,
-                    data={}
-                )
+                return await self.async_finish(LEGACY_USER)
 
         schema = OrderedDict()
         schema['password'] = str

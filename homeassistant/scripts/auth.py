@@ -3,9 +3,11 @@ import argparse
 import asyncio
 import os
 
+from homeassistant import auth
+from homeassistant.auth_providers import homeassistant as hass_auth
+from homeassistant.auth_providers.modules import totp as hass_auth_tfa
 from homeassistant.core import HomeAssistant
 from homeassistant.config import get_default_config_dir
-from homeassistant.auth_providers import homeassistant as hass_auth
 
 
 def run(args):
@@ -47,8 +49,13 @@ def run(args):
     loop = asyncio.get_event_loop()
     hass = HomeAssistant(loop=loop)
     hass.config.config_dir = os.path.join(os.getcwd(), args.config)
-    data = hass_auth.Data(hass, args.config)
+    data = hass_auth.Data(hass)
     loop.run_until_complete(data.async_load())
+    if args.tfa:
+        tfa_module = hass_auth_tfa.TotpAuthModule(
+            hass, None, {'type': 'totp', 'id': 'totp'})
+        loop.run_until_complete(tfa_module.async_load())
+        setattr(data, 'tfa_module', tfa_module)
     loop.run_until_complete(args.func(data, args))
 
 
@@ -65,9 +72,11 @@ async def list_users(data, args):
 
 async def add_user(data, args):
     """Create a user."""
-    secret = data.add_user(args.username, args.password)
+    data.add_user(args.username, args.password)
     await data.async_save()
-    if secret is not None:
+    if args.tfa:
+        secret = data.tfa_module.add_ota_secret(args.username)
+        await data.tfa_module.async_save()
         print("User created, please set up Google Authenticator or any other"
               " compatible apps like Authy with key: %s" % secret)
     else:
@@ -78,15 +87,23 @@ async def validate_login(data, args):
     """Validate a login."""
     try:
         data.validate_login(args.username, args.password)
-        print("Auth valid")
-    except hass_auth.InvalidAuth:
-        print("Auth invalid")
-    except hass_auth.Request2FA as request2fa:
-        try:
-            data.validate_2fa(request2fa.session_token, args.code)
+        if args.tfa:
+            session_id = await data.tfa_module.async_create_session(
+                {'username': args.username})
+            if session_id is None:
+                print("Auth valid, however user %s is not enabled for"
+                      " two factor authentication" % args.username)
+                return
+            username = await data.tfa_module.async_validation_flow(
+                session_id, {'code': args.code})
+            if username is not None:
+                print("Auth valid")
+            else:
+                print("Auth invalid")
+        else:
             print("Auth valid")
-        except hass_auth.InvalidAuth:
-            print("Auth invalid")
+    except (hass_auth.InvalidAuth, auth.InvalidAuth):
+        print("Auth invalid")
 
 
 async def change_password(data, args):
