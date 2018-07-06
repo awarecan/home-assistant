@@ -339,7 +339,7 @@ class LoginFlow(data_entry_flow.FlowHandler):
 
     async def async_finish(self, username):
         """Handle the pass of login flow."""
-        if len(self._auth_modules) > 0:
+        if self._auth_modules:
             _, auth_module = self._auth_modules.popitem(False)
 
             step_id = 'auth_module_' + auth_module.type
