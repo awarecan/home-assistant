@@ -50,9 +50,6 @@ class Data:
                 'users': [],
             }
 
-        if 'users' not in data:
-            data['users'] = []
-
         self._data = data
 
     @property
@@ -132,11 +129,8 @@ class HassAuthProvider(auth.AuthProvider):
         """Helper to validate a username and password."""
         data = Data(self.hass)
         await data.async_load()
-        try:
-            await self.hass.async_add_executor_job(
-                data.validate_login, username, password)
-        finally:
-            await data.async_save()
+        await self.hass.async_add_executor_job(
+            data.validate_login, username, password)
 
     async def async_get_or_create_credentials(self, flow_result):
         """Get credentials based on the flow result."""
