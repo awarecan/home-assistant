@@ -331,9 +331,7 @@ class LoginFlow(data_entry_flow.FlowHandler):
         """Handle the first step of login flow.
 
         Return self.async_show_form(step_id='init') if user_input == None.
-        Return next auth_module validation step if login init step pass.
-        Return self.async_create_entry(data={'username':username}) if login
-          init step pass and no auth_module loaded
+        Return await self.async_finish(username) if login init step pass.
         """
         raise NotImplementedError
 
