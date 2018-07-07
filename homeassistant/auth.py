@@ -243,12 +243,12 @@ class AuthProvider:
         """Return the name of the auth provider."""
         return self.config.get(CONF_NAME, self.DEFAULT_TITLE)
 
-    async def load_modules(self, moudle_configs):
+    async def load_modules(self, module_configs):
         """Load auth modules."""
-        if moudle_configs:
+        if module_configs:
             modules = await asyncio.gather(
                 *[_auth_module_from_config(self.hass, None, config)
-                  for config in moudle_configs])
+                  for config in module_configs])
         else:
             modules = []
         # So returned auth modules are in same order as config
