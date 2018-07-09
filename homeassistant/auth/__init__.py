@@ -456,10 +456,9 @@ class Credentials:
 async def load_module(hass, module_name, module_type):
     """Load an auth provider."""
     if module_type == 'auth provider':
-        module_path = 'homeassistant.auth_providers.{}'.format(module_name)
+        module_path = 'homeassistant.auth.providers.{}'.format(module_name)
     elif module_type == 'auth module':
-        module_path = 'homeassistant.auth_providers.modules.{}'.\
-            format(module_name)
+        module_path = 'homeassistant.auth.modules.{}'.format(module_name)
     else:
         raise ValueError('Parameter type has to be "auth provider"'
                          ' or "auth module".')

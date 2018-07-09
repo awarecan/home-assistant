@@ -1,6 +1,6 @@
 """Test the example module auth module."""
 from homeassistant import auth, data_entry_flow
-from homeassistant.auth_providers import insecure_example as test_auth
+from homeassistant.auth.providers import insecure_example as test_auth
 
 
 async def test_validate(hass):

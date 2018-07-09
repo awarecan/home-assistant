@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import pytest
 
 from homeassistant import auth
-from homeassistant.auth_providers import legacy_api_password
+from homeassistant.auth.providers import legacy_api_password
 
 
 @pytest.fixture

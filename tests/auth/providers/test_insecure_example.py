@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 from homeassistant import auth
-from homeassistant.auth_providers import insecure_example
+from homeassistant.auth.providers import insecure_example
 
 from tests.common import mock_coro
 

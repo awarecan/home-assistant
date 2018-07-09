@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from homeassistant import auth, data_entry_flow
-from homeassistant.auth_providers import insecure_example as test_auth
+from homeassistant.auth.providers import insecure_example as test_auth
 
 MOCK_CODE = '123456'
 
