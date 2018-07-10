@@ -11,12 +11,8 @@ async def test_validate(hass):
     })
     await auth_module.async_initialize()
 
-    session = await auth_module.async_create_session({
-        'username': 'test-user'
-    })
-
     username = await auth_module.async_validation_flow(
-            session, {'pin': '123456'})
+            'test-user', {'pin': '123456'})
     assert username == 'test-user'
 
 

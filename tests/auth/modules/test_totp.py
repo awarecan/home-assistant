@@ -17,13 +17,9 @@ async def test_validating_2fa(hass):
     await totp_auth_module.async_initialize()
     totp_auth_module.add_ota_secret('test-user')
 
-    session = await totp_auth_module.async_create_session({
-        'username': 'test-user'
-    })
-
     with patch('pyotp.TOTP.verify', return_value=True):
         username = await totp_auth_module.async_validation_flow(
-            session, {'code': MOCK_CODE})
+            'test-user', {'code': MOCK_CODE})
         assert username == 'test-user'
 
 
@@ -35,18 +31,14 @@ async def test_validating_2fa_invalid_code(hass):
     await totp_auth_module.async_initialize()
     totp_auth_module.add_ota_secret('test-user')
 
-    session = await totp_auth_module.async_create_session({
-        'username': 'test-user'
-    })
-
     with patch('pyotp.TOTP.verify', return_value=False):
         with pytest.raises(auth.InvalidAuth):
             await totp_auth_module.async_validation_flow(
-                session, {'code': MOCK_CODE})
+                'test-user', {'code': MOCK_CODE})
 
 
-async def test_validating_2fa_invalid_session(hass):
-    """Test validating an 2fa code with invalid session_token."""
+async def test_validating_2fa_invalid_user(hass):
+    """Test validating an 2fa code with invalid user."""
     totp_auth_module = await auth._auth_module_from_config(hass, None, {
         'type': 'totp'
     })
@@ -55,7 +47,7 @@ async def test_validating_2fa_invalid_session(hass):
 
     with pytest.raises(auth.InvalidAuth):
         await totp_auth_module.async_validation_flow(
-            'invalid-session', {'code': MOCK_CODE})
+            'invalid-user', {'code': MOCK_CODE})
 
 
 async def test_login_flow_validates_2fa(hass):

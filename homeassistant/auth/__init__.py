@@ -48,12 +48,9 @@ AUTH_PROVIDER_SCHEMA = vol.Schema({
         vol.All(cv.ensure_list, [AUTH_MODULE_SCHEMA])
 }, extra=vol.ALLOW_EXTRA)
 
-
 ACCESS_TOKEN_EXPIRATION = timedelta(minutes=30)
-VALIDATION_SESSION_EXPIRATION = timedelta(minutes=5)
-DATA_REQS = 'auth_reqs_processed'
-
 SESSION_EXPIRATION = timedelta(minutes=5)
+DATA_REQS = 'auth_reqs_processed'
 
 
 def generate_secret(entropy: int = 32) -> str:
@@ -70,86 +67,6 @@ class InvalidAuth(HomeAssistantError):
     """Raised when we encounter invalid authentication."""
 
 
-class SessionStore:
-    """Stores auth module sessions in memory.
-
-    Internal storage of sessions is a Dict with session_id as key, and
-     (data, expire_time) as value.
-    """
-
-    def __init__(self, hass):
-        """Initialize the auth store."""
-        self.hass = hass
-        self._sessions = None
-
-    async def async_load(self):
-        """Load sessions.
-
-        Lazy load SessionStore, can be extend to support persistent storage
-         in future.
-        """
-        self._sessions = {}
-        return
-
-    async def async_save(self):
-        """Save sessions.
-
-        Can be extend to support persistent storage in future.
-        """
-        return
-
-    async def async_get_session(self, session_id):
-        """Retrieve a session by id."""
-        if self._sessions is None:
-            await self.async_load()
-
-        # first clean up expired sessions
-        await self.async_cleanup_session()
-
-        session = self._sessions.get(session_id)
-        return session[0] if session is not None else None
-
-    async def async_open_session(self, data):
-        """Create a session."""
-        if self._sessions is None:
-            await self.async_load()
-
-        # first clean up expired sessions
-        await self.async_cleanup_session()
-
-        session_id = generate_secret(64)
-        expire_time = dt_util.utcnow() + SESSION_EXPIRATION
-        self._sessions[session_id] = (data, expire_time.isoformat())
-
-        await self.async_save()
-        return session_id
-
-    async def async_close_session(self, session_id):
-        """Close a session.
-
-        Return None if session is not exist or expired
-        """
-        if self._sessions is None:
-            await self.async_load()
-
-        data = None
-        session = self._sessions.get(session_id)
-        if session is not None:
-            data = session[0]
-            del self._sessions[session_id]
-        # clean up expired sessions
-        await self.async_cleanup_session()
-        await self.async_save()
-        return data
-
-    async def async_cleanup_session(self):
-        """Clean up expired sessions."""
-        for session_id in list(self._sessions.keys()):
-            _, expire_time = self._sessions[session_id]
-            if dt_util.utcnow() > dt_util.parse_datetime(expire_time):
-                del self._sessions[session_id]
-
-
 class AuthModule:
     """Provider of validation function."""
 
@@ -157,10 +74,9 @@ class AuthModule:
 
     initialized = False
 
-    def __init__(self, hass, store, config):
+    def __init__(self, hass, config):
         """Initialize an auth module."""
         self.hass = hass
-        self.store = store or SessionStore(hass)
         self.config = config
         _LOGGER.debug('auth module %s loaded.',
                       self.type if self.id is None else "{}[{}]".format(
@@ -190,14 +106,6 @@ class AuthModule:
         """Return the input schema of the auth module."""
         raise NotImplementedError
 
-    async def async_create_session(self, data):
-        """Create a validation session."""
-        return await self.store.async_open_session(data)
-
-    async def async_get_session(self, session_id):
-        """Create a validation session."""
-        return await self.store.async_get_session(session_id)
-
     # Implement by extending class
 
     async def async_initialize(self):
@@ -206,7 +114,7 @@ class AuthModule:
         Optional.
         """
 
-    async def async_validation_flow(self, data, user_input):
+    async def async_validation_flow(self, username, user_input):
         """Return the data flow for validation with auth module."""
         raise NotImplementedError
 
@@ -325,7 +233,7 @@ class LoginFlow(data_entry_flow.FlowHandler):
         self._auth_provider = auth_provider
         # self._auth_modules is mutable, we need a copy
         self._auth_modules = auth_provider.modules.copy()
-        self._data = dict()
+        self.created_at = dt_util.utcnow()
 
     async def async_step_init(self, user_input=None):
         """Handle the first step of login flow.
@@ -340,6 +248,8 @@ class LoginFlow(data_entry_flow.FlowHandler):
         if self._auth_modules:
             _, auth_module = self._auth_modules.popitem(False)
 
+            self.created_at = dt_util.utcnow()
+
             step_id = 'auth_module_' + auth_module.type
             if auth_module.id is not None:
                 step_id += '_' + auth_module.id
@@ -351,22 +261,18 @@ class LoginFlow(data_entry_flow.FlowHandler):
                 result = None
 
                 if user_input is not None:
-                    try:
-                        result = await auth_module.async_validation_flow(
-                            self._data.get(step_id), user_input)
-                    except InvalidAuth:
-                        errors['base'] = 'invalid_auth'
+                    expires = self.created_at + SESSION_EXPIRATION
+                    if (dt_util.utcnow() > expires)
+                        errors['base'] = 'login_expired'
+                    else:
+                        try:
+                            result = await auth_module.async_validation_flow(
+                                username, user_input)
+                        except InvalidAuth:
+                            errors['base'] = 'invalid_auth'
 
                     if not errors and result:
                         return await self.async_finish(result)
-                else:
-                    session_id = await auth_module.\
-                        async_create_session({'username': username})
-                    if session_id is None:
-                        _LOGGER.debug("Create validation session failed in "
-                                      " %s, ignore it", auth_module.type)
-                        return await self.async_finish(result)
-                    self._data[step_id] = session_id
 
                 return self.async_show_form(
                     step_id=step_id,

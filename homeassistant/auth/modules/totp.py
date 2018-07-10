@@ -74,9 +74,25 @@ class TotpAuthModule(auth.AuthModule):
         })
         return ota_secret
 
-    async def async_create_session(self, data):
-        """Create a validation session."""
-        username = data.get('username')
+    async def async_validation_flow(self, username, user_input):
+        """Return username if validation passed."""
+        if username is None or user_input is None:
+            raise auth.InvalidAuth
+
+        await self.hass.async_add_executor_job(
+            self.validate_2fa, username, user_input.get('code'))
+        return username
+
+    def validate_2fa(self, username, code):
+        """Validate two factor authentication code.
+
+        Raises InvalidAuth if auth invalid.
+        """
+        if username is None:
+            raise auth.InvalidAuth
+
+        import pyotp
+
         ota_secret = None
         for user in self.users:
             if username == user.get('username'):
@@ -84,48 +100,8 @@ class TotpAuthModule(auth.AuthModule):
                 break
 
         if ota_secret is None:
-            _LOGGER.warning("Although two factor authentication is enabled,"
-                            " user %s dose not setup accordingly. Ignore two"
-                            " factor authentication.", username)
-            return
-
-        return await self.store.async_open_session(data)
-
-    async def async_validation_flow(self, data, user_input):
-        """Return username if validation passed."""
-        if data is None:
-            raise ValueError('data parameter should not be None')
-
-        session_token = data
-        session_data = await self.async_get_session(session_token)
-
-        await self.hass.async_add_executor_job(
-            self.validate_2fa, session_data, user_input.get('code'))
-        session_data = await self.async_get_session(session_token)
-        return session_data.get('username') \
-            if session_data is not None else None
-
-    def validate_2fa(self, session_data, code):
-        """Validate two factor authentication code.
-
-        Raises InvalidAuth if auth invalid.
-        """
-        if session_data is None:
-            raise auth.InvalidAuth
-
-        import pyotp
-
-        ota_secret = None
-        if session_data is not None:
-            username = session_data.get('username')
-            for user in self.users:
-                if username == user.get('username'):
-                    ota_secret = user.get('ota_secret')
-                    break
-
-        if ota_secret is None:
-            # even we cannot find user or session, we still do verify
-            # to make timing the same as if session was found.
+            # even we cannot find user, we still do verify
+            # to make timing the same as if user was found.
             pyotp.TOTP(pyotp.random_base32()).verify(code)
             raise auth.InvalidAuth
 

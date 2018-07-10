@@ -47,17 +47,11 @@ class InsecureExampleModule(auth.AuthModule):
         """Initialize the auth module."""
         pass
 
-    async def async_create_session(self, data):
-        """Create a validation session."""
-        return await self.store.async_open_session(data)
-
-    async def async_validation_flow(self, data, user_input):
+    async def async_validation_flow(self, username, user_input):
         """Return username if validation passed."""
-        session_data = await self.async_get_session(data)
-        if session_data is None:
+        if username is None or user_input is None:
             raise auth.InvalidAuth
 
-        username = session_data.get('username')
         for user in self.users:
             if username == user.get('username'):
                 if user.get('pin') == user_input.get('pin'):
