@@ -262,7 +262,7 @@ class LoginFlow(data_entry_flow.FlowHandler):
 
                 if user_input is not None:
                     expires = self.created_at + SESSION_EXPIRATION
-                    if (dt_util.utcnow() > expires)
+                    if (dt_util.utcnow() > expires):
                         errors['base'] = 'login_expired'
                     else:
                         try:

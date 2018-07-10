@@ -4,8 +4,8 @@ import asyncio
 import os
 
 from homeassistant import auth
-from homeassistant.auth_providers import homeassistant as hass_auth
-from homeassistant.auth_providers.modules import totp as hass_auth_tfa
+from homeassistant.auth.providers import homeassistant as hass_auth
+from homeassistant.auth.modules import totp as hass_auth_tfa
 from homeassistant.core import HomeAssistant
 from homeassistant.config import get_default_config_dir
 
@@ -88,14 +88,8 @@ async def validate_login(data, args):
     try:
         data.validate_login(args.username, args.password)
         if args.tfa:
-            session_id = await data.tfa_module.async_create_session(
-                {'username': args.username})
-            if session_id is None:
-                print("Auth valid, however user %s is not enabled for"
-                      " two factor authentication" % args.username)
-                return
             username = await data.tfa_module.async_validation_flow(
-                session_id, {'code': args.code})
+                args.username, {'code': args.code})
             if username is not None:
                 print("Auth valid")
             else:
