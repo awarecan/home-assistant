@@ -155,7 +155,7 @@ class AuthProvider:
         """Load auth modules."""
         if module_configs:
             modules = await asyncio.gather(
-                *[_auth_module_from_config(self.hass, None, config)
+                *[_auth_module_from_config(self.hass, config)
                   for config in module_configs])
         else:
             modules = []
@@ -262,7 +262,7 @@ class LoginFlow(data_entry_flow.FlowHandler):
 
                 if user_input is not None:
                     expires = self.created_at + SESSION_EXPIRATION
-                    if (dt_util.utcnow() > expires):
+                    if dt_util.utcnow() > expires:
                         errors['base'] = 'login_expired'
                     else:
                         try:
@@ -440,7 +440,7 @@ async def _auth_provider_from_config(hass, store, config):
     return AUTH_PROVIDERS[provider_name](hass, store, config)
 
 
-async def _auth_module_from_config(hass, store, config):
+async def _auth_module_from_config(hass, config):
     """Initialize an auth module from a config."""
     module_name = config[CONF_TYPE]
     module = await load_module(hass, module_name, 'auth module')
@@ -455,7 +455,7 @@ async def _auth_module_from_config(hass, store, config):
                       module_name, humanize_error(config, err))
         return None
 
-    return AUTH_MODULES[module_name](hass, store, config)
+    return AUTH_MODULES[module_name](hass, config)
 
 
 class AuthManager:

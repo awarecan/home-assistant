@@ -5,7 +5,7 @@ from homeassistant.auth.providers import insecure_example as test_auth
 
 async def test_validate(hass):
     """Test validating pin."""
-    auth_module = await auth._auth_module_from_config(hass, None, {
+    auth_module = await auth._auth_module_from_config(hass, {
         'type': 'insecure_example',
         'users': [{'username': 'test-user', 'pin': '123456'}]
     })

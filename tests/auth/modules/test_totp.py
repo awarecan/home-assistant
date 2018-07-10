@@ -11,7 +11,7 @@ MOCK_CODE = '123456'
 
 async def test_validating_2fa(hass):
     """Test validating 2fa code."""
-    totp_auth_module = await auth._auth_module_from_config(hass, None, {
+    totp_auth_module = await auth._auth_module_from_config(hass, {
         'type': 'totp'
     })
     await totp_auth_module.async_initialize()
@@ -25,7 +25,7 @@ async def test_validating_2fa(hass):
 
 async def test_validating_2fa_invalid_code(hass):
     """Test validating an invalid 2fa code."""
-    totp_auth_module = await auth._auth_module_from_config(hass, None, {
+    totp_auth_module = await auth._auth_module_from_config(hass, {
         'type': 'totp'
     })
     await totp_auth_module.async_initialize()
@@ -39,7 +39,7 @@ async def test_validating_2fa_invalid_code(hass):
 
 async def test_validating_2fa_invalid_user(hass):
     """Test validating an 2fa code with invalid user."""
-    totp_auth_module = await auth._auth_module_from_config(hass, None, {
+    totp_auth_module = await auth._auth_module_from_config(hass, {
         'type': 'totp'
     })
     await totp_auth_module.async_initialize()

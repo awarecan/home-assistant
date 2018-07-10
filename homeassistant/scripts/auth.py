@@ -53,7 +53,7 @@ def run(args):
     loop.run_until_complete(data.async_load())
     if args.tfa:
         tfa_module = hass_auth_tfa.TotpAuthModule(
-            hass, None, {'type': 'totp', 'id': 'totp'})
+            hass, {'type': 'totp', 'id': 'totp'})
         loop.run_until_complete(tfa_module.async_load())
         setattr(data, 'tfa_module', tfa_module)
     loop.run_until_complete(args.func(data, args))

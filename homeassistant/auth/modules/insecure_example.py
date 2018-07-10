@@ -25,9 +25,9 @@ class InsecureExampleModule(auth.AuthModule):
 
     DEFAULT_TITLE = 'Personal Identify Number'
 
-    def __init__(self, hass, store, config):
+    def __init__(self, hass, config):
         """Initialize the user data store."""
-        super().__init__(hass, store, config)
+        super().__init__(hass, config)
         self._data = None
         self._users = config.get('users')
 

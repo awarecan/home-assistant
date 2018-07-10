@@ -23,9 +23,9 @@ class TotpAuthModule(auth.AuthModule):
 
     DEFAULT_TITLE = 'Time-based One Time Password'
 
-    def __init__(self, hass, store, config):
+    def __init__(self, hass, config):
         """Initialize the user data store."""
-        super().__init__(hass, store, config)
+        super().__init__(hass, config)
         self._data = None
         self._user_store = hass.helpers.storage.Store(
             STORAGE_VERSION, STORAGE_KEY)
