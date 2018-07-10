@@ -21,7 +21,7 @@ def data(hass, enabled_2fa):
     hass.loop.run_until_complete(data.async_load())
     if enabled_2fa:
         tfa_module = hass_auth_tfa.TotpAuthModule(
-            hass, None, {'type': 'totp', 'id': 'totp'})
+            hass, {'type': 'totp', 'id': 'totp'})
         hass.loop.run_until_complete(tfa_module.async_load())
         setattr(data, 'tfa_module', tfa_module)
 
