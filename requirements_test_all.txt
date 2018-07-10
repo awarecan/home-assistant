@@ -151,7 +151,7 @@ pymonoprice==0.3
 # homeassistant.components.binary_sensor.nx584
 pynx584==0.4
 
-# homeassistant.auth_providers.modules.totp
+# homeassistant.auth.modules.totp
 # homeassistant.components.sensor.otp
 pyotp==2.2.6
 
