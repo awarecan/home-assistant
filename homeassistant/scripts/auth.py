@@ -5,7 +5,6 @@ import os
 
 from homeassistant import auth
 from homeassistant.auth.providers import homeassistant as hass_auth
-from homeassistant.auth.modules import totp as hass_auth_tfa
 from homeassistant.core import HomeAssistant
 from homeassistant.config import get_default_config_dir
 
@@ -20,14 +19,13 @@ def run(args):
         '-c', '--config',
         default=get_default_config_dir(),
         help="Directory that contains the Home Assistant configuration")
-    parser.add_argument(
-        '-t', '--tfa', default=False,
-        help="Whether enable two factor authentication")
 
     subparsers = parser.add_subparsers(dest='func')
     subparsers.required = True
     parser_list = subparsers.add_parser('list')
     parser_list.set_defaults(func=list_users)
+    parser_list.add_argument('-a', '--all', default=False,
+                             help="Show all users included system user")
 
     parser_add = subparsers.add_parser('add')
     parser_add.add_argument('username', type=str)
@@ -45,52 +43,72 @@ def run(args):
     parser_change_pw.add_argument('new_password', type=str)
     parser_change_pw.set_defaults(func=change_password)
 
+    parser_enable_mfa = subparsers.add_parser('enable_mfa')
+    parser_enable_mfa.add_argument('username', type=str)
+    parser_enable_mfa.add_argument('password', type=str)
+    parser_enable_mfa.set_defaults(func=enable_mfa)
+
     args = parser.parse_args(args)
     loop = asyncio.get_event_loop()
     hass = HomeAssistant(loop=loop)
     hass.config.config_dir = os.path.join(os.getcwd(), args.config)
+
+    provider_config = [{'type': 'homeassistant'}]
+    module_config = [{'type': 'totp'}]
+    hass.auth = loop.run_until_complete(
+        auth.auth_manager_from_config(hass, provider_config, module_config))
+
     data = hass_auth.Data(hass)
     loop.run_until_complete(data.async_load())
-    if args.tfa:
-        tfa_module = hass_auth_tfa.TotpAuthModule(
-            hass, {'type': 'totp', 'id': 'totp'})
-        loop.run_until_complete(tfa_module.async_load())
-        setattr(data, 'tfa_module', tfa_module)
-    loop.run_until_complete(args.func(data, args))
+    loop.run_until_complete(args.func(hass.auth, data, args))
 
 
-async def list_users(data, args):
+async def list_users(auth_manager, data, args):
     """List the users."""
     count = 0
-    for user in data.users:
-        count += 1
-        print(user['username'])
+    if args.all:
+        # pylint: disable=protected-access
+        for user in await auth_manager._store.async_get_users():
+            print("{}{}{}".format(
+                str(user.name).ljust(20),
+                str(user.id).ljust(34),
+                str(user.mfa_modules)
+            ))
+            count += 1
+            for cred in user.credentials:
+                print("  - {}".format(cred.data.get('username')))
+
+    else:
+        provider = list(auth_manager.async_auth_providers)[0]
+        for user in await provider.async_credentials():
+            count += 1
+            print(user.data.get('username'))
 
     print()
     print("Total users:", count)
 
 
-async def add_user(data, args):
+async def add_user(auth_manager, data, args):
     """Create a user."""
     data.add_user(args.username, args.password)
     await data.async_save()
-    if args.tfa:
-        secret = data.tfa_module.add_ota_secret(args.username)
-        await data.tfa_module.async_save()
-        print("User created, please set up Google Authenticator or any other"
-              " compatible apps like Authy with key: %s" % secret)
-    else:
-        print("User created")
+    print("User created")
 
 
-async def validate_login(data, args):
+async def validate_login(auth_manager, data, args):
     """Validate a login."""
     try:
         data.validate_login(args.username, args.password)
-        if args.tfa:
-            username = await data.tfa_module.async_validation_flow(
-                args.username, {'code': args.code})
-            if username is not None:
+        if args.code:
+            provider = list(auth_manager.async_auth_providers)[0]
+            credential = await provider.async_get_or_create_credentials(
+                {'username': args.username})
+            user = await auth_manager.async_get_or_create_user(credential)
+
+            module = await auth_manager.async_get_auth_module('totp')
+            result = await module.async_validation_flow(
+                user.id, {'code': args.code})
+            if result is not None:
                 print("Auth valid")
             else:
                 print("Auth invalid")
@@ -100,7 +118,7 @@ async def validate_login(data, args):
         print("Auth invalid")
 
 
-async def change_password(data, args):
+async def change_password(auth_manager, data, args):
     """Change password."""
     try:
         data.change_password(args.username, args.new_password)
@@ -108,3 +126,23 @@ async def change_password(data, args):
         print("Password changed")
     except hass_auth.InvalidUser:
         print("User not found")
+
+
+async def enable_mfa(auth_manager, data, args):
+    """Enable mfa for user."""
+    try:
+        data.validate_login(args.username, args.password)
+
+        provider = list(auth_manager.async_auth_providers)[0]
+        credential = await provider.async_get_or_create_credentials(
+            {'username': args.username})
+        user = await auth_manager.async_get_or_create_user(credential)
+        secret = await auth_manager.async_enable_user_mfa(user, 'totp')
+        # FIXME need to wait until AuthStore save finish
+        print(
+            "Multi-factor auth enabled, please set up Google Authenticator or"
+            " any other compatible apps like Authy with key: %s" % secret)
+    except hass_auth.InvalidUser:
+        print("User not found")
+    except (hass_auth.InvalidAuth, auth.InvalidAuth):
+        print("Auth invalid")

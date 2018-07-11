@@ -8,7 +8,7 @@ from homeassistant import auth
 
 CONFIG_SCHEMA = auth.AUTH_PROVIDER_SCHEMA.extend({
     vol.Required('users'): [vol.Schema({
-        vol.Required('username'): str,
+        vol.Required('user_id'): str,
         vol.Required('pin'): str,
     })]
 }, extra=vol.PREVENT_EXTRA)
@@ -29,7 +29,7 @@ class InsecureExampleModule(auth.AuthModule):
         """Initialize the user data store."""
         super().__init__(hass, config)
         self._data = None
-        self._users = config.get('users')
+        self._users = config.get('users', [])
 
     @property
     def input_schema(self):
@@ -47,14 +47,22 @@ class InsecureExampleModule(auth.AuthModule):
         """Initialize the auth module."""
         pass
 
-    async def async_validation_flow(self, username, user_input):
+    async def async_setup_user(self, user_id, **kwargs):
+        """Setup auth module for user."""
+        pin = kwargs.get('pin')
+        if not pin:
+            raise ValueError('Expected pin in **kwargs')
+        self._users.append({'user_id': user_id, 'pin': pin})
+        return pin
+
+    async def async_validation_flow(self, user_id, user_input):
         """Return username if validation passed."""
-        if username is None or user_input is None:
+        if user_id is None or user_input is None:
             raise auth.InvalidAuth
 
         for user in self.users:
-            if username == user.get('username'):
+            if user_id == user.get('user_id'):
                 if user.get('pin') == user_input.get('pin'):
-                    return username
+                    return user_id
 
         raise auth.InvalidAuth

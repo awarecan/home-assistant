@@ -1,33 +1,64 @@
 """Test the example module auth module."""
 from homeassistant import auth, data_entry_flow
 from homeassistant.auth.providers import insecure_example as test_auth
+from tests.common import MockUser
 
 
 async def test_validate(hass):
     """Test validating pin."""
     auth_module = await auth._auth_module_from_config(hass, {
         'type': 'insecure_example',
-        'users': [{'username': 'test-user', 'pin': '123456'}]
+        'users': [{'user_id': 'test-user', 'pin': '123456'}]
     })
     await auth_module.async_initialize()
 
-    username = await auth_module.async_validation_flow(
+    user_id = await auth_module.async_validation_flow(
             'test-user', {'pin': '123456'})
-    assert username == 'test-user'
+    assert user_id == 'test-user'
+
+
+async def test_setup_user(hass):
+    """Test validating pin."""
+    auth_module = await auth._auth_module_from_config(hass, {
+        'type': 'insecure_example',
+        'users': []
+    })
+    await auth_module.async_initialize()
+
+    result = await auth_module.async_setup_user('test-user', pin='123456')
+    assert result == '123456'
+
+    user_id = await auth_module.async_validation_flow(
+            'test-user', {'pin': '123456'})
+    assert user_id == 'test-user'
 
 
 async def test_login(hass):
     """Test login flow with auth module."""
-    provider = test_auth.ExampleAuthProvider(hass, None, {
+    hass.auth: auth.AuthManager = await auth.auth_manager_from_config(hass, [{
+        'type': 'insecure_example',
         'users': [{'username': 'test-user', 'password': 'test-pass'}],
-        'modules': [{
-            'type': 'insecure_example',
-            'users': [{'username': 'test-user', 'pin': '123456'}]
-        }]
-    })
-    await provider.async_initialize()
+    }], [{
+        'type': 'insecure_example',
+        'users': [{'user_id': 'mock-user', 'pin': '123456'}]
+    }])
+    user = MockUser(
+        id='mock-user',
+        is_owner=False,
+        is_active=False,
+        name='Paulus',
+        mfa_modules=['insecure_example']
+    ).add_to_auth_manager(hass.auth)
+    await hass.auth.async_link_user(user, auth.Credentials(
+        id='mock-id',
+        auth_provider_type='insecure_example',
+        auth_provider_id=None,
+        data={'username': 'test-user'},
+        is_new=False,
+    ))
 
-    flow = test_auth.LoginFlow(provider)
+    flow = test_auth.LoginFlow(
+        list(hass.auth.async_auth_providers)[0])
     result = await flow.async_step_init()
     assert result['type'] == data_entry_flow.RESULT_TYPE_FORM
 
@@ -50,15 +81,13 @@ async def test_login(hass):
         'password': 'test-pass',
     })
     assert result['type'] == data_entry_flow.RESULT_TYPE_FORM
-    assert result['step_id'] == 'auth_module_insecure_example'
+    assert result['step_id'] == 'mfa'
     assert result['data_schema'].schema.get('pin') == str
 
-    step_pin = getattr(flow, 'async_step_auth_module_insecure_example')
-
-    result = await step_pin({'pin': 'invalid-code'})
+    result = await flow.async_step_mfa({'pin': 'invalid-code'})
     assert result['type'] == data_entry_flow.RESULT_TYPE_FORM
     assert result['errors']['base'] == 'invalid_auth'
 
-    result = await step_pin({'pin': '123456'})
+    result = await flow.async_step_mfa({'pin': '123456'})
     assert result['type'] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
     assert result['data']['username'] == 'test-user'

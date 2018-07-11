@@ -19,7 +19,7 @@ from homeassistant.const import (
     CONF_TIME_ZONE, CONF_ELEVATION, CONF_UNIT_SYSTEM_METRIC,
     CONF_UNIT_SYSTEM_IMPERIAL, CONF_TEMPERATURE_UNIT, TEMP_CELSIUS,
     __version__, CONF_CUSTOMIZE, CONF_CUSTOMIZE_DOMAIN, CONF_CUSTOMIZE_GLOB,
-    CONF_WHITELIST_EXTERNAL_DIRS, CONF_AUTH_PROVIDERS)
+    CONF_WHITELIST_EXTERNAL_DIRS, CONF_AUTH_PROVIDERS, CONF_AUTH_MFA_MODULES)
 from homeassistant.core import callback, DOMAIN as CONF_CORE
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.loader import get_component, get_platform
@@ -159,7 +159,9 @@ CORE_CONFIG_SCHEMA = CUSTOMIZE_CONFIG_SCHEMA.extend({
         vol.All(cv.ensure_list, [vol.IsDir()]),
     vol.Optional(CONF_PACKAGES, default={}): PACKAGES_CONFIG_SCHEMA,
     vol.Optional(CONF_AUTH_PROVIDERS):
-        vol.All(cv.ensure_list, [auth.AUTH_PROVIDER_SCHEMA])
+        vol.All(cv.ensure_list, [auth.AUTH_PROVIDER_SCHEMA]),
+    vol.Optional(CONF_AUTH_MFA_MODULES):
+        vol.All(cv.ensure_list, [auth.AUTH_MODULE_SCHEMA]),
 })
 
 
@@ -401,7 +403,10 @@ async def async_process_ha_core_config(hass, config):
     # Only load auth during startup.
     if not hasattr(hass, 'auth'):
         hass.auth = await auth.auth_manager_from_config(
-            hass, config.get(CONF_AUTH_PROVIDERS, []))
+            hass,
+            config.get(CONF_AUTH_PROVIDERS, []),
+            config.get(CONF_AUTH_MFA_MODULES, [])
+        )
 
     hac = hass.config
 

@@ -62,40 +62,47 @@ class TotpAuthModule(auth.AuthModule):
         """Save data."""
         await self._user_store.async_save(self._data)
 
-    def add_ota_secret(self, username):
+    def add_ota_secret(self, user_id):
         """Create a ota_secret for user."""
         import pyotp
 
         ota_secret = pyotp.random_base32()
 
         self.users.append({
-            'username': username,
+            'user_id': user_id,
             'ota_secret': ota_secret
         })
         return ota_secret
 
-    async def async_validation_flow(self, username, user_input):
+    async def async_setup_user(self, user_id, **kwargs):
+        """Setup auth module for user."""
+        result = await self.hass.async_add_executor_job(
+            self.add_ota_secret, user_id)
+        await self.async_save()
+        return result
+
+    async def async_validation_flow(self, user_id, user_input):
         """Return username if validation passed."""
-        if username is None or user_input is None:
+        if user_id is None or user_input is None:
             raise auth.InvalidAuth
 
         await self.hass.async_add_executor_job(
-            self.validate_2fa, username, user_input.get('code'))
-        return username
+            self.validate_2fa, user_id, user_input.get('code'))
+        return user_id
 
-    def validate_2fa(self, username, code):
+    def validate_2fa(self, user_id, code):
         """Validate two factor authentication code.
 
         Raises InvalidAuth if auth invalid.
         """
-        if username is None:
+        if user_id is None:
             raise auth.InvalidAuth
 
         import pyotp
 
         ota_secret = None
         for user in self.users:
-            if username == user.get('username'):
+            if user_id == user.get('user_id'):
                 ota_secret = user.get('ota_secret')
                 break
 

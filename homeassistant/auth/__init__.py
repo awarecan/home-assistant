@@ -26,8 +26,6 @@ _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 STORAGE_KEY = 'auth'
 
-CONF_MODULES = 'modules'
-
 AUTH_MODULES = Registry()
 
 AUTH_MODULE_SCHEMA = vol.Schema({
@@ -44,8 +42,6 @@ AUTH_PROVIDER_SCHEMA = vol.Schema({
     vol.Optional(CONF_NAME): str,
     # Specify ID if you have two auth providers for same type.
     vol.Optional(CONF_ID): str,
-    vol.Optional(CONF_MODULES):
-        vol.All(cv.ensure_list, [AUTH_MODULE_SCHEMA])
 }, extra=vol.ALLOW_EXTRA)
 
 ACCESS_TOKEN_EXPIRATION = timedelta(minutes=30)
@@ -87,9 +83,9 @@ class AuthModule:
     def id(self):  # pylint: disable=invalid-name
         """Return id of the auth module.
 
-        Optional, can be None.
+        Default is same as type
         """
-        return self.config.get(CONF_ID)
+        return self.config.get(CONF_ID, self.type)
 
     @property
     def type(self):
@@ -114,7 +110,11 @@ class AuthModule:
         Optional.
         """
 
-    async def async_validation_flow(self, username, user_input):
+    async def async_setup_user(self, user_id, **kwargs):
+        """Setup auth module for user."""
+        raise NotImplementedError
+
+    async def async_validation_flow(self, user_id, user_input):
         """Return the data flow for validation with auth module."""
         raise NotImplementedError
 
@@ -131,7 +131,6 @@ class AuthProvider:
         self.hass = hass
         self.store = store
         self.config = config
-        self.modules = OrderedDict()
 
     @property
     def id(self):  # pylint: disable=invalid-name
@@ -150,35 +149,6 @@ class AuthProvider:
     def name(self):
         """Return the name of the auth provider."""
         return self.config.get(CONF_NAME, self.DEFAULT_TITLE)
-
-    async def load_modules(self, module_configs):
-        """Load auth modules."""
-        if module_configs:
-            modules = await asyncio.gather(
-                *[_auth_module_from_config(self.hass, config)
-                  for config in module_configs])
-        else:
-            modules = []
-        # So returned auth modules are in same order as config
-        module_hash = OrderedDict()
-        for module in modules:
-            if module is None:
-                continue
-
-            key = (module.type, module.id)
-
-            if key in module_hash:
-                _LOGGER.error(
-                    'Found duplicate auth module: %s. Please add unique IDs'
-                    ' if you want to have the same auth module twice.', key)
-                continue
-
-            if not module.initialized:
-                module.initialized = True
-                await module.async_initialize()
-
-            module_hash[key] = module
-        return module_hash
 
     async def async_credentials(self):
         """Return all credentials of this provider."""
@@ -200,11 +170,13 @@ class AuthProvider:
             data=data,
         )
 
-    async def async_initialize(self):
-        """Initialize the auth provider."""
-        self.modules = await self.load_modules(self.config.get(CONF_MODULES))
-
     # Implement by extending class
+
+    async def async_initialize(self):
+        """Initialize the auth provider.
+
+        Optional.
+        """
 
     async def async_login_flow(self):
         """Return the data flow for logging in with auth provider.
@@ -228,11 +200,13 @@ class AuthProvider:
 class LoginFlow(data_entry_flow.FlowHandler):
     """Handler for the login flow."""
 
-    def __init__(self, auth_provider):
+    def __init__(self, auth_provider: AuthProvider):
         """Initialize the login flow."""
         self._auth_provider = auth_provider
-        # self._auth_modules is mutable, we need a copy
-        self._auth_modules = auth_provider.modules.copy()
+        self._auth_module_id = None
+        self._auth_manager: AuthManager = auth_provider.hass.auth
+        self._user = None
+        self._username = None
         self.created_at = dt_util.utcnow()
 
     async def async_step_init(self, user_input=None):
@@ -243,55 +217,90 @@ class LoginFlow(data_entry_flow.FlowHandler):
         """
         raise NotImplementedError
 
-    async def async_finish(self, username):
-        """Handle the pass of login flow."""
-        if self._auth_modules:
-            _, auth_module = self._auth_modules.popitem(False)
+    async def async_step_select_mfa_module(self, user_input=None):
+        """Handle the step of select mfa module."""
+        errors = {}
 
-            self.created_at = dt_util.utcnow()
+        if user_input is not None:
+            auth_module = user_input.get('multi_factor_auth_module')
+            if auth_module in self._user.mfa_modules:
+                self._auth_module_id = auth_module
+                return await self.async_step_mfa()
+            else:
+                errors['base'] = 'invalid_auth'
 
-            step_id = 'auth_module_' + auth_module.type
-            if auth_module.id is not None:
-                step_id += '_' + auth_module.id
-            step_method_name = 'async_step_' + step_id
+        schema = OrderedDict()
+        schema['multi_factor_auth_module'] = vol.In(self._user.mfa_modules)
 
-            async def step(self, user_input=None):
-                """Handle the step of validation."""
-                errors = {}
-                result = None
+        return self.async_show_form(
+            step_id='select_mfa_module',
+            data_schema=vol.Schema(schema),
+            errors=errors,
+        )
 
-                if user_input is not None:
-                    expires = self.created_at + SESSION_EXPIRATION
-                    if dt_util.utcnow() > expires:
-                        errors['base'] = 'login_expired'
-                    else:
-                        try:
-                            result = await auth_module.async_validation_flow(
-                                username, user_input)
-                        except InvalidAuth:
-                            errors['base'] = 'invalid_auth'
+    async def async_step_mfa(self, user_input=None):
+        """Handle the step of mfa validation."""
+        errors = {}
+        result = None
 
-                    if not errors and result:
-                        return await self.async_finish(result)
+        auth_module = await self._auth_manager.async_get_auth_module(
+            self._auth_module_id)
+        if auth_module is None:
+            errors['base'] = 'invalid_auth_module'
 
-                return self.async_show_form(
-                    step_id=step_id,
-                    data_schema=vol.Schema(auth_module.input_schema),
-                    errors=errors,
-                )
+            schema = OrderedDict()
+            schema['multi_factor_auth_module'] = vol.In(self._user.mfa_modules)
 
-            step.__name__ = step_method_name
-            step.__doc__ = "Handle the step of auth module {} validate.".\
-                format(auth_module.type)
-            # bind step() as self.async_step_auth_module_{auth_module.type}()
-            setattr(self, step_method_name, types.MethodType(step, self))
-
-            return await getattr(self, step_method_name)()
-        else:
-            return self.async_create_entry(
-                title=self._auth_provider.name,
-                data={'username': username}
+            return self.async_show_form(
+                step_id='select_mfa_module',
+                data_schema=vol.Schema(schema),
+                errors=errors,
             )
+
+        if user_input is not None:
+            expires = self.created_at + SESSION_EXPIRATION
+            if dt_util.utcnow() > expires:
+                errors['base'] = 'login_expired'
+            else:
+                try:
+                    result = await auth_module.async_validation_flow(
+                        self._user.id, user_input)
+                except InvalidAuth:
+                    errors['base'] = 'invalid_auth'
+
+            if not errors and result:
+                return await self.async_finish(self._username, mfa_valid=True)
+
+        return self.async_show_form(
+            step_id='mfa',
+            data_schema=vol.Schema(auth_module.input_schema),
+            errors=errors,
+        )
+
+    async def async_finish(self, username, mfa_valid=False):
+        """Handle the pass of login flow."""
+        if not mfa_valid:
+            self._username = username
+            credentials = await self._auth_provider.\
+                async_get_or_create_credentials({'username': username})
+
+            # multi-factor module cannot enabled for new credential
+            if not credentials.is_new:
+                self._user = await self._auth_manager.\
+                    async_get_user_by_credentials(credentials)
+
+                if self._user.mfa_modules:
+                    if len(self._user.mfa_modules) > 1:
+                        return await self.async_step_select_mfa_module()
+                    else:
+                        self._auth_module_id = self._user.mfa_modules[0]
+                        return await self.async_step_mfa()
+
+        # new credential or no mfa_module enabled or passed mfa validate
+        return self.async_create_entry(
+            title=self._auth_provider.name,
+            data={'username': username}
+        )
 
 
 @attr.s(slots=True)
@@ -309,6 +318,9 @@ class User:
 
     # Tokens associated with a user.
     refresh_tokens = attr.ib(type=dict, default=attr.Factory(dict), cmp=False)
+
+    # Enabled multi-factor auth modules of a user.
+    mfa_modules = attr.ib(type=list, default=attr.Factory(list), cmp=False)
 
 
 @attr.s(slots=True)
@@ -394,7 +406,7 @@ async def load_module(hass, module_name, module_type):
     return module
 
 
-async def auth_manager_from_config(hass, provider_configs):
+async def auth_manager_from_config(hass, provider_configs, module_configs):
     """Initialize an auth manager from config."""
     store = AuthStore(hass)
     if provider_configs:
@@ -418,7 +430,28 @@ async def auth_manager_from_config(hass, provider_configs):
             continue
 
         provider_hash[key] = provider
-    manager = AuthManager(hass, store, provider_hash)
+
+    if module_configs:
+        modules = await asyncio.gather(
+            *[_auth_module_from_config(hass, config)
+              for config in module_configs])
+    else:
+        modules = []
+    # So returned auth modules are in same order as config
+    module_hash = OrderedDict()
+    for module in modules:
+        if module is None:
+            continue
+
+        if module.id in module_hash:
+            _LOGGER.error(
+                'Found duplicate multi-factor module: %s. Please add unique '
+                'IDs if you want to have the same module twice.', module.id)
+            continue
+
+        module_hash[module.id] = module
+
+    manager = AuthManager(hass, store, provider_hash, module_hash)
     return manager
 
 
@@ -451,7 +484,7 @@ async def _auth_module_from_config(hass, config):
     try:
         config = module.CONFIG_SCHEMA(config)
     except vol.Invalid as err:
-        _LOGGER.error('Invalid configuration for auth module %s: %s',
+        _LOGGER.error('Invalid configuration for multi-factor module %s: %s',
                       module_name, humanize_error(config, err))
         return None
 
@@ -461,10 +494,12 @@ async def _auth_module_from_config(hass, config):
 class AuthManager:
     """Manage the authentication for Home Assistant."""
 
-    def __init__(self, hass, store, providers):
+    def __init__(self, hass, store, providers, mfa_modules):
         """Initialize the auth manager."""
+        self.hass = hass
         self._store = store
         self._providers = providers
+        self._mfa_modules = mfa_modules
         self.login_flow = data_entry_flow.FlowManager(
             hass, self._async_create_login_flow,
             self._async_finish_login_flow)
@@ -492,6 +527,19 @@ class AuthManager:
         """Return a list of available auth providers."""
         return self._providers.values()
 
+    @property
+    def async_auth_modules(self):
+        """Return a list of available auth modules."""
+        return self._mfa_modules.values()
+
+    async def async_get_auth_module(self, module_id):
+        """Return an auth modules, None if not found."""
+        module = self._mfa_modules.get(module_id)
+        if module and not module.initialized:
+            module.initialized = True
+            await module.async_initialize()
+        return module
+
     async def async_get_user(self, user_id):
         """Retrieve a user."""
         return await self._store.async_get_user(user_id)
@@ -504,15 +552,20 @@ class AuthManager:
             is_active=True,
         )
 
+    async def async_get_user_by_credentials(self, credentials):
+        """Get a user by credential, raise ValueError if not found."""
+        for user in await self._store.async_get_users():
+
+            for creds in user.credentials:
+                if creds.id == credentials.id:
+                    return user
+
+        raise ValueError('Unable to find the user.')
+
     async def async_get_or_create_user(self, credentials):
         """Get or create a user."""
         if not credentials.is_new:
-            for user in await self._store.async_get_users():
-                for creds in user.credentials:
-                    if creds.id == credentials.id:
-                        return user
-
-            raise ValueError('Unable to find the user.')
+            return await self.async_get_user_by_credentials(credentials)
 
         auth_provider = self._async_get_auth_provider(credentials)
         info = await auth_provider.async_user_meta_for_credentials(
@@ -540,6 +593,20 @@ class AuthManager:
     async def async_remove_user(self, user):
         """Remove a user."""
         await self._store.async_remove_user(user)
+
+    async def async_enable_user_mfa(self, user, mfa_module_id, **kwargs):
+        """Enable a multi-factor auth module for user."""
+        if mfa_module_id not in self._mfa_modules:
+            raise ValueError('Unable find multi-factor auth module: {}'
+                             .format(mfa_module_id))
+        if user.system_generated:
+            raise ValueError('System generated users cannot enable '
+                             'multi-factor auth module.')
+
+        module = await self.async_get_auth_module(mfa_module_id)
+        result = await module.async_setup_user(user.id, **kwargs)
+        await self._store.async_enable_user_mfa(user, mfa_module_id)
+        return result
 
     async def async_create_refresh_token(self, user, client_id=None):
         """Create a new refresh token for a user."""
@@ -680,6 +747,23 @@ class AuthStore:
         self._users.pop(user.id)
         await self.async_save()
 
+    async def async_enable_user_mfa(self, user, mfa_module_id):
+        """Enable a mfa module for user."""
+        local_user = await self.async_get_user(user.id)
+        local_user.mfa_modules.append(mfa_module_id)
+        await self.async_save()
+        return local_user
+
+    async def async_disable_user_mfa(self, user, mfa_module_id):
+        """Disable a mfa module for user."""
+        if mfa_module_id in self._users[user.id].mfa_modules:
+            local_user = await self.async_get_user(user.id)
+            local_user.mfa_modules.remove(mfa_module_id)
+            await self.async_save()
+            return local_user
+        else:
+            return user
+
     async def async_create_refresh_token(self, user, client_id=None):
         """Create a new token for a user."""
         refresh_token = RefreshToken(user=user, client_id=client_id)
@@ -760,6 +844,7 @@ class AuthStore:
                 'is_active': user.is_active,
                 'name': user.name,
                 'system_generated': user.system_generated,
+                'mfa_modules': user.mfa_modules
             }
             for user in self._users.values()
         ]

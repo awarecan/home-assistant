@@ -2,7 +2,7 @@
 
 import pytest
 
-from homeassistant import data_entry_flow
+from homeassistant import data_entry_flow, auth
 from homeassistant.auth.providers import homeassistant as hass_auth
 
 
@@ -64,7 +64,8 @@ async def test_login_flow_validates(data, hass):
     data.add_user('test-user', 'test-pass')
     await data.async_save()
 
-    provider = hass_auth.HassAuthProvider(hass, None, {})
+    provider = hass_auth.HassAuthProvider(hass, auth.AuthStore(hass),
+                                          {'type': 'homeassistant'})
     flow = hass_auth.LoginFlow(provider)
     result = await flow.async_step_init()
     assert result['type'] == data_entry_flow.RESULT_TYPE_FORM

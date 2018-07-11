@@ -5,6 +5,7 @@ import pytest
 
 from homeassistant import auth, data_entry_flow
 from homeassistant.auth.providers import insecure_example as test_auth
+from tests.common import MockUser
 
 MOCK_CODE = '123456'
 
@@ -15,12 +16,12 @@ async def test_validating_2fa(hass):
         'type': 'totp'
     })
     await totp_auth_module.async_initialize()
-    totp_auth_module.add_ota_secret('test-user')
+    await totp_auth_module.async_setup_user('test-user')
 
     with patch('pyotp.TOTP.verify', return_value=True):
-        username = await totp_auth_module.async_validation_flow(
+        user_id = await totp_auth_module.async_validation_flow(
             'test-user', {'code': MOCK_CODE})
-        assert username == 'test-user'
+        assert user_id == 'test-user'
 
 
 async def test_validating_2fa_invalid_code(hass):
@@ -29,7 +30,7 @@ async def test_validating_2fa_invalid_code(hass):
         'type': 'totp'
     })
     await totp_auth_module.async_initialize()
-    totp_auth_module.add_ota_secret('test-user')
+    await totp_auth_module.async_setup_user('test-user')
 
     with patch('pyotp.TOTP.verify', return_value=False):
         with pytest.raises(auth.InvalidAuth):
@@ -43,7 +44,7 @@ async def test_validating_2fa_invalid_user(hass):
         'type': 'totp'
     })
     await totp_auth_module.async_initialize()
-    totp_auth_module.add_ota_secret('test-user')
+    await totp_auth_module.async_setup_user('test-user')
 
     with pytest.raises(auth.InvalidAuth):
         await totp_auth_module.async_validation_flow(
@@ -52,19 +53,32 @@ async def test_validating_2fa_invalid_user(hass):
 
 async def test_login_flow_validates_2fa(hass):
     """Test login flow with 2fa enabled."""
-    provider = test_auth.ExampleAuthProvider(hass, None, {
+    hass.auth: auth.AuthManager = await auth.auth_manager_from_config(hass, [{
+        'type': 'insecure_example',
         'users': [{'username': 'test-user', 'password': 'test-pass'}],
-        'modules': [{'type': 'totp'}]
-    })
+    }], [{
+        'type': 'totp',
+    }])
+    user = MockUser(
+        id='mock-user',
+        is_owner=False,
+        is_active=False,
+        name='Paulus',
+        mfa_modules=[]
+    ).add_to_auth_manager(hass.auth)
+    await hass.auth.async_link_user(user, auth.Credentials(
+        id='mock-id',
+        auth_provider_type='insecure_example',
+        auth_provider_id=None,
+        data={'username': 'test-user'},
+        is_new=False,
+    ))
 
-    # Load module
-    await provider.async_initialize()
-    assert len(provider.modules) == 1
-    totp_auth_module = list(provider.modules.values())[0]
-    await totp_auth_module.async_initialize()
-    totp_auth_module.add_ota_secret('test-user')
+    await hass.auth.async_enable_user_mfa(user, 'totp')
 
-    flow = test_auth.LoginFlow(provider)
+    flow = test_auth.LoginFlow(
+        list(hass.auth.async_auth_providers)[0])
+
     result = await flow.async_step_init()
     assert result['type'] == data_entry_flow.RESULT_TYPE_FORM
 
@@ -87,17 +101,16 @@ async def test_login_flow_validates_2fa(hass):
         'password': 'test-pass',
     })
     assert result['type'] == data_entry_flow.RESULT_TYPE_FORM
-    assert result['step_id'] == 'auth_module_totp'
+    assert result['step_id'] == 'mfa'
     assert result['data_schema'].schema.get('code') == str
 
-    step_2fa = getattr(flow, 'async_step_auth_module_totp')
-
     with patch('pyotp.TOTP.verify', return_value=False):
-        result = await step_2fa({'code': 'invalid-code'})
+        result = await flow.async_step_mfa({'code': 'invalid-code'})
         assert result['type'] == data_entry_flow.RESULT_TYPE_FORM
+        assert result['step_id'] == 'mfa'
         assert result['errors']['base'] == 'invalid_auth'
 
     with patch('pyotp.TOTP.verify', return_value=True):
-        result = await step_2fa({'code': MOCK_CODE})
+        result = await flow.async_step_mfa({'code': MOCK_CODE})
         assert result['type'] == data_entry_flow.RESULT_TYPE_CREATE_ENTRY
         assert result['data']['username'] == 'test-user'
