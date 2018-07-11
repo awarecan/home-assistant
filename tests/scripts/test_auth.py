@@ -5,7 +5,6 @@ import pytest
 
 from homeassistant import auth
 from homeassistant.auth.providers import homeassistant as hass_auth
-from homeassistant.auth.modules import totp as hass_auth_tfa
 from homeassistant.scripts import auth as script_auth
 from tests.common import MockUser
 

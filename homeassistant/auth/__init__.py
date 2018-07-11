@@ -4,7 +4,6 @@ import binascii
 import importlib
 import logging
 import os
-import types
 import uuid
 from collections import OrderedDict
 from datetime import datetime, timedelta
@@ -17,7 +16,6 @@ from homeassistant import data_entry_flow, requirements
 from homeassistant.const import CONF_TYPE, CONF_NAME, CONF_ID
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 from homeassistant.util.decorator import Registry
 
