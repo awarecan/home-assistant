@@ -202,7 +202,7 @@ class LoginFlow(data_entry_flow.FlowHandler):
         """Initialize the login flow."""
         self._auth_provider = auth_provider
         self._auth_module_id = None
-        self._auth_manager: AuthManager = auth_provider.hass.auth
+        self._auth_manager = auth_provider.hass.auth
         self._user = None
         self._username = None
         self.created_at = dt_util.utcnow()
