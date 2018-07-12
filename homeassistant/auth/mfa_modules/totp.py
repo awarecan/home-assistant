@@ -5,10 +5,12 @@ from collections import OrderedDict
 import voluptuous as vol
 
 from homeassistant import auth
+from . import MultiFactorAuthModule, MULTI_FACTOR_AUTH_MODULES, \
+    MULTI_FACTOR_AUTH_MODULE_SCHEMA
 
 REQUIREMENTS = ['pyotp==2.2.6']
 
-CONFIG_SCHEMA = auth.MUTLFACTOR_AUTH_MODULE_SCHEMA.extend({
+CONFIG_SCHEMA = MULTI_FACTOR_AUTH_MODULE_SCHEMA.extend({
 }, extra=vol.PREVENT_EXTRA)
 
 STORAGE_VERSION = 1
@@ -17,8 +19,8 @@ STORAGE_KEY = 'auth_module.totp'
 _LOGGER = logging.getLogger(__name__)
 
 
-@auth.MUTLFACTOR_AUTH_MODULES.register('totp')
-class TotpAuthModule(auth.MultiFactorAuthModule):
+@MULTI_FACTOR_AUTH_MODULES.register('totp')
+class TotpAuthModule(MultiFactorAuthModule):
     """Auth module validate time-based one time password."""
 
     DEFAULT_TITLE = 'Time-based One Time Password'

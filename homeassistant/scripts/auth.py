@@ -114,7 +114,7 @@ async def validate_login(auth_manager, data, args):
                 print("Auth invalid")
         else:
             print("Auth valid")
-    except (hass_auth.InvalidAuth, auth.InvalidAuth):
+    except auth.InvalidAuth:
         print("Auth invalid")
 
 
@@ -124,7 +124,7 @@ async def change_password(auth_manager, data, args):
         data.change_password(args.username, args.new_password)
         await data.async_save()
         print("Password changed")
-    except hass_auth.InvalidUser:
+    except auth.InvalidUser:
         print("User not found")
 
 
@@ -143,7 +143,7 @@ async def enable_mfa(auth_manager, data, args):
             " any other compatible apps like Authy with key: %s" % secret)
         # need to stop hass to force AuthStore flash
         await auth_manager.hass.async_stop()
-    except hass_auth.InvalidUser:
+    except auth.InvalidUser:
         print("User not found")
-    except (hass_auth.InvalidAuth, auth.InvalidAuth):
+    except auth.InvalidAuth:
         print("Auth invalid")

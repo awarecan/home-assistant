@@ -4,6 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from homeassistant import auth, data_entry_flow
+from homeassistant.auth.mfa_modules import _auth_module_from_config
 from homeassistant.auth.providers import insecure_example as test_auth
 from tests.common import MockUser
 
@@ -12,7 +13,7 @@ MOCK_CODE = '123456'
 
 async def test_validating_mfa(hass):
     """Test validating mfa code."""
-    totp_auth_module = await auth._auth_module_from_config(hass, {
+    totp_auth_module = await _auth_module_from_config(hass, {
         'type': 'totp'
     })
     await totp_auth_module.async_initialize()
@@ -26,7 +27,7 @@ async def test_validating_mfa(hass):
 
 async def test_validating_mfa_invalid_code(hass):
     """Test validating an invalid mfa code."""
-    totp_auth_module = await auth._auth_module_from_config(hass, {
+    totp_auth_module = await _auth_module_from_config(hass, {
         'type': 'totp'
     })
     await totp_auth_module.async_initialize()
@@ -40,7 +41,7 @@ async def test_validating_mfa_invalid_code(hass):
 
 async def test_validating_mfa_invalid_user(hass):
     """Test validating an mfa code with invalid user."""
-    totp_auth_module = await auth._auth_module_from_config(hass, {
+    totp_auth_module = await _auth_module_from_config(hass, {
         'type': 'totp'
     })
     await totp_auth_module.async_initialize()
@@ -76,8 +77,8 @@ async def test_login_flow_validates_mfa(hass):
 
     await hass.auth.async_enable_user_mfa(user, 'totp')
 
-    flow = test_auth.LoginFlow(
-        list(hass.auth.async_auth_providers)[0])
+    provider = list(hass.auth.async_auth_providers)[0]
+    flow = await provider.async_login_flow()
 
     result = await flow.async_step_init()
     assert result['type'] == data_entry_flow.RESULT_TYPE_FORM

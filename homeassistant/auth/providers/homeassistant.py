@@ -8,27 +8,18 @@ from collections import OrderedDict
 import voluptuous as vol
 
 from homeassistant import auth
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.auth import InvalidAuth, InvalidUser
+
+from . import AUTH_PROVIDER_SCHEMA, AUTH_PROVIDERS, AuthProvider, LoginFlow
 
 STORAGE_VERSION = 1
 STORAGE_KEY = 'auth_provider.homeassistant'
 
-CONFIG_SCHEMA = auth.AUTH_PROVIDER_SCHEMA.extend({
+CONFIG_SCHEMA = AUTH_PROVIDER_SCHEMA.extend({
 }, extra=vol.PREVENT_EXTRA)
 
 
 _LOGGER = logging.getLogger(__name__)
-
-
-class InvalidAuth(HomeAssistantError):
-    """Raised when we encounter invalid authentication."""
-
-
-class InvalidUser(HomeAssistantError):
-    """Raised when invalid user is specified.
-
-    Will not be raised when validating authentication.
-    """
 
 
 class Data:
@@ -115,15 +106,15 @@ class Data:
         await self._store.async_save(self._data)
 
 
-@auth.AUTH_PROVIDERS.register('homeassistant')
-class HassAuthProvider(auth.AuthProvider):
+@AUTH_PROVIDERS.register('homeassistant')
+class HassAuthProvider(AuthProvider):
     """Auth provider based on a local storage of users in HASS config dir."""
 
     DEFAULT_TITLE = 'Home Assistant Local'
 
     async def async_login_flow(self):
         """Return a flow to login."""
-        return LoginFlow(self)
+        return HassLoginFlow(self)
 
     async def async_validate_login(self, username, password):
         """Helper to validate a username and password."""
@@ -146,7 +137,7 @@ class HassAuthProvider(auth.AuthProvider):
         })
 
 
-class LoginFlow(auth.LoginFlow):
+class HassLoginFlow(LoginFlow):
     """Handler for the login flow."""
 
     async def async_step_init(self, user_input=None):

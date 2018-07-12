@@ -64,14 +64,14 @@ async def test_match_existing_credentials(store, provider):
 
 async def test_verify_username(provider):
     """Test we raise if incorrect user specified."""
-    with pytest.raises(insecure_example.InvalidAuthError):
+    with pytest.raises(auth.InvalidAuth):
         await provider.async_validate_login(
             'non-existing-user', 'password-test')
 
 
 async def test_verify_password(provider):
     """Test we raise if incorrect user specified."""
-    with pytest.raises(insecure_example.InvalidAuthError):
+    with pytest.raises(auth.InvalidAuth):
         await provider.async_validate_login(
             'user-test', 'incorrect-password')
 

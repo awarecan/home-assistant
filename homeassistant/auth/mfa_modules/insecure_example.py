@@ -5,8 +5,10 @@ from collections import OrderedDict
 import voluptuous as vol
 
 from homeassistant import auth
+from . import MultiFactorAuthModule, MULTI_FACTOR_AUTH_MODULES, \
+    MULTI_FACTOR_AUTH_MODULE_SCHEMA
 
-CONFIG_SCHEMA = auth.AUTH_PROVIDER_SCHEMA.extend({
+CONFIG_SCHEMA = MULTI_FACTOR_AUTH_MODULE_SCHEMA.extend({
     vol.Required('users'): [vol.Schema({
         vol.Required('user_id'): str,
         vol.Required('pin'): str,
@@ -19,8 +21,8 @@ STORAGE_KEY = 'auth_module.insecure_example'
 _LOGGER = logging.getLogger(__name__)
 
 
-@auth.MUTLFACTOR_AUTH_MODULES.register('insecure_example')
-class InsecureExampleModule(auth.MultiFactorAuthModule):
+@MULTI_FACTOR_AUTH_MODULES.register('insecure_example')
+class InsecureExampleModule(MultiFactorAuthModule):
     """Example auth module validate pin."""
 
     DEFAULT_TITLE = 'Personal Identify Number'

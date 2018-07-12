@@ -62,7 +62,7 @@ async def test_verify_login(hass, provider):
     hass.http = Mock(api_password='test-password')
     provider.async_validate_login('test-password')
     hass.http = Mock(api_password='test-password')
-    with pytest.raises(legacy_api_password.InvalidAuthError):
+    with pytest.raises(auth.InvalidAuth):
         provider.async_validate_login('invalid-password')
 
 

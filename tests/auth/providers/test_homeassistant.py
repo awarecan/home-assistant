@@ -23,13 +23,13 @@ async def test_adding_user(data, hass):
 async def test_adding_user_duplicate_username(data, hass):
     """Test adding a user with duplicate username."""
     data.add_user('test-user', 'test-pass')
-    with pytest.raises(hass_auth.InvalidUser):
+    with pytest.raises(auth.InvalidUser):
         data.add_user('test-user', 'other-pass')
 
 
 async def test_validating_password_invalid_user(data, hass):
     """Test validating an invalid user."""
-    with pytest.raises(hass_auth.InvalidAuth):
+    with pytest.raises(auth.InvalidAuth):
         data.validate_login('non-existing', 'pw')
 
 
@@ -37,7 +37,7 @@ async def test_validating_password_invalid_password(data, hass):
     """Test validating an invalid password."""
     data.add_user('test-user', 'test-pass')
 
-    with pytest.raises(hass_auth.InvalidAuth):
+    with pytest.raises(auth.InvalidAuth):
         data.validate_login('test-user', 'invalid-pass')
 
 
@@ -47,7 +47,7 @@ async def test_changing_password(data, hass):
     data.add_user(user, 'test-pass')
     data.change_password(user, 'new-pass')
 
-    with pytest.raises(hass_auth.InvalidAuth):
+    with pytest.raises(auth.InvalidAuth):
         data.validate_login(user, 'test-pass')
 
     data.validate_login(user, 'new-pass')
@@ -55,7 +55,7 @@ async def test_changing_password(data, hass):
 
 async def test_changing_password_raises_invalid_user(data, hass):
     """Test that we initialize an empty config."""
-    with pytest.raises(hass_auth.InvalidUser):
+    with pytest.raises(auth.InvalidUser):
         data.change_password('non-existing', 'pw')
 
 
@@ -66,7 +66,7 @@ async def test_login_flow_validates(data, hass):
 
     provider = hass_auth.HassAuthProvider(hass, auth.AuthStore(hass),
                                           {'type': 'homeassistant'})
-    flow = hass_auth.LoginFlow(provider)
+    flow = await provider.async_login_flow()
     result = await flow.async_step_init()
     assert result['type'] == data_entry_flow.RESULT_TYPE_FORM
 

@@ -1,12 +1,13 @@
 """Test the example module auth module."""
 from homeassistant import auth, data_entry_flow
+from homeassistant.auth.mfa_modules import _auth_module_from_config
 from homeassistant.auth.providers import insecure_example as test_auth
 from tests.common import MockUser
 
 
 async def test_validate(hass):
     """Test validating pin."""
-    auth_module = await auth._auth_module_from_config(hass, {
+    auth_module = await _auth_module_from_config(hass, {
         'type': 'insecure_example',
         'users': [{'user_id': 'test-user', 'pin': '123456'}]
     })
@@ -19,7 +20,7 @@ async def test_validate(hass):
 
 async def test_setup_user(hass):
     """Test validating pin."""
-    auth_module = await auth._auth_module_from_config(hass, {
+    auth_module = await _auth_module_from_config(hass, {
         'type': 'insecure_example',
         'users': []
     })
@@ -57,8 +58,9 @@ async def test_login(hass):
         is_new=False,
     ))
 
-    flow = test_auth.LoginFlow(
-        list(hass.auth.async_auth_providers)[0])
+    provider = list(hass.auth.async_auth_providers)[0]
+    flow = await provider.async_login_flow()
+
     result = await flow.async_step_init()
     assert result['type'] == data_entry_flow.RESULT_TYPE_FORM
 

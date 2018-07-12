@@ -164,7 +164,7 @@ async def test_change_password(data, capsys, hass_storage):
     captured = capsys.readouterr()
     assert captured.out == 'Password changed\n'
     data.validate_login('test-user', 'new-pass')
-    with pytest.raises(hass_auth.InvalidAuth):
+    with pytest.raises(auth.InvalidAuth):
         data.validate_login('test-user', 'test-pass')
 
 
@@ -179,7 +179,7 @@ async def test_change_password_invalid_user(data, capsys, hass_storage):
     captured = capsys.readouterr()
     assert captured.out == 'User not found\n'
     data.validate_login('test-user', 'test-pass')
-    with pytest.raises(hass_auth.InvalidAuth):
+    with pytest.raises(auth.InvalidAuth):
         data.validate_login('invalid-user', 'new-pass')
 
 

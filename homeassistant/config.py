@@ -12,7 +12,9 @@ from typing import Any, Tuple, Optional  # noqa: F401
 import voluptuous as vol
 from voluptuous.humanize import humanize_error
 
-from homeassistant import auth
+from homeassistant.auth import auth_manager_from_config
+from homeassistant.auth.mfa_modules import MULTI_FACTOR_AUTH_MODULE_SCHEMA
+from homeassistant.auth.providers import AUTH_PROVIDER_SCHEMA
 from homeassistant.const import (
     ATTR_FRIENDLY_NAME, ATTR_HIDDEN, ATTR_ASSUMED_STATE,
     CONF_LATITUDE, CONF_LONGITUDE, CONF_NAME, CONF_PACKAGES, CONF_UNIT_SYSTEM,
@@ -159,9 +161,9 @@ CORE_CONFIG_SCHEMA = CUSTOMIZE_CONFIG_SCHEMA.extend({
         vol.All(cv.ensure_list, [vol.IsDir()]),
     vol.Optional(CONF_PACKAGES, default={}): PACKAGES_CONFIG_SCHEMA,
     vol.Optional(CONF_AUTH_PROVIDERS):
-        vol.All(cv.ensure_list, [auth.AUTH_PROVIDER_SCHEMA]),
+        vol.All(cv.ensure_list, [AUTH_PROVIDER_SCHEMA]),
     vol.Optional(CONF_AUTH_MFA_MODULES):
-        vol.All(cv.ensure_list, [auth.MUTLFACTOR_AUTH_MODULE_SCHEMA]),
+        vol.All(cv.ensure_list, [MULTI_FACTOR_AUTH_MODULE_SCHEMA]),
 })
 
 
@@ -402,7 +404,7 @@ async def async_process_ha_core_config(hass, config):
 
     # Only load auth during startup.
     if not hasattr(hass, 'auth'):
-        hass.auth = await auth.auth_manager_from_config(
+        hass.auth = await auth_manager_from_config(
             hass,
             config.get(CONF_AUTH_PROVIDERS, []),
             config.get(CONF_AUTH_MFA_MODULES, [])
