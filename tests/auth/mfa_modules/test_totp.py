@@ -51,6 +51,22 @@ async def test_validating_mfa_invalid_user(hass):
             'invalid-user', {'code': MOCK_CODE})
 
 
+async def test_setup_depose_user(hass):
+    """Test despose user."""
+    totp_auth_module = await _auth_module_from_config(hass, {
+        'type': 'totp'
+    })
+    await totp_auth_module.async_initialize()
+    result = await totp_auth_module.async_setup_user('test-user')
+    assert len(totp_auth_module.users) == 1
+    result2 = await totp_auth_module.async_setup_user('test-user')
+    assert len(totp_auth_module.users) == 1
+    assert result != result2
+
+    await totp_auth_module.async_depose_user('test-user')
+    assert len(totp_auth_module.users) == 0
+
+
 async def test_login_flow_validates_mfa(hass):
     """Test login flow with mfa enabled."""
     hass.auth = await auth.auth_manager_from_config(hass, [{

@@ -282,6 +282,19 @@ class AuthManager:
         await self._store.async_enable_user_mfa(user, mfa_module_id)
         return result
 
+    async def async_disable_user_mfa(self, user, mfa_module_id):
+        """Disable a multi-factor auth module for user."""
+        if mfa_module_id not in self._mfa_modules:
+            raise ValueError('Unable find multi-factor auth module: {}'
+                             .format(mfa_module_id))
+        if user.system_generated:
+            raise ValueError('System generated users cannot disable '
+                             'multi-factor auth module.')
+
+        module = await self.async_get_auth_module(mfa_module_id)
+        await module.async_depose_user(user.id)
+        await self._store.async_disable_user_mfa(user, mfa_module_id)
+
     async def async_create_refresh_token(self, user, client_id=None):
         """Create a new refresh token for a user."""
         if not user.is_active:
@@ -424,16 +437,19 @@ class AuthStore:
     async def async_enable_user_mfa(self, user, mfa_module_id):
         """Enable a mfa module for user."""
         local_user = await self.async_get_user(user.id)
+        if mfa_module_id in local_user.mfa_modules:
+            return local_user
+
         local_user.mfa_modules.append(mfa_module_id)
         await self.async_save()
         return local_user
 
     async def async_disable_user_mfa(self, user, mfa_module_id):
         """Disable a mfa module for user."""
-        if mfa_module_id not in self._users[user.id].mfa_modules:
-            return user
-
         local_user = await self.async_get_user(user.id)
+        if mfa_module_id not in local_user.mfa_modules:
+            return local_user
+
         local_user.mfa_modules.remove(mfa_module_id)
         await self.async_save()
         return local_user

@@ -77,6 +77,10 @@ class MultiFactorAuthModule:
         """Setup auth module for user."""
         raise NotImplementedError
 
+    async def async_depose_user(self, user_id):
+        """Setup auth module for user."""
+        raise NotImplementedError
+
     async def async_validation_flow(self, user_id, user_input):
         """Return the data flow for validation with auth module."""
         raise NotImplementedError

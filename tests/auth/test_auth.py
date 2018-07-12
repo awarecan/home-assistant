@@ -561,3 +561,63 @@ async def test_auth_module_expired_session(mock_hass):
         assert step['type'] == data_entry_flow.RESULT_TYPE_FORM
         assert step['step_id'] == 'mfa'
         assert step['errors']['base'] == 'login_expired'
+
+
+async def test_enable_mfa_for_user(hass, hass_storage):
+    """Test enable mfa module for user."""
+    manager = await auth.auth_manager_from_config(hass, [{
+        'type': 'insecure_example',
+        'users': [{
+            'username': 'test-user',
+            'password': 'test-pass',
+        }]
+    }], [{
+        'type': 'insecure_example',
+        'users': [],
+    }])
+
+    step = await manager.login_flow.async_init(('insecure_example', None))
+    step = await manager.login_flow.async_configure(step['flow_id'], {
+        'username': 'test-user',
+        'password': 'test-pass',
+    })
+    user = await manager.async_get_or_create_user(step['result'])
+    assert user is not None
+
+    # new user don't have mfa enabled
+    assert bool(user.mfa_modules) is False
+
+    module = await manager.async_get_auth_module('insecure_example')
+    # mfa module don't have data
+    assert bool(module.users) is False
+
+    # test enable mfa for user
+    await manager.async_enable_user_mfa(user, 'insecure_example',
+                                        pin='test-pin')
+    assert len(user.mfa_modules) == 1
+    assert 'insecure_example' in user.mfa_modules
+    assert len(module.users) == 1
+    assert module.users[0] == {'user_id': user.id, 'pin': 'test-pin'}
+
+    # re-enable mfa for user will override
+    await manager.async_enable_user_mfa(user, 'insecure_example',
+                                        pin='test-pin-new')
+    assert len(user.mfa_modules) == 1
+    assert 'insecure_example' in user.mfa_modules
+    assert len(module.users) == 1
+    assert module.users[0] == {'user_id': user.id, 'pin': 'test-pin-new'}
+
+    # system user cannot enable mfa
+    system_user = await manager.async_create_system_user('system-user')
+    with pytest.raises(ValueError):
+        await manager.async_enable_user_mfa(system_user, 'insecure_example',
+                                            pin='test-pin')
+    assert len(module.users) == 1
+
+    # disable mfa for user
+    await manager.async_disable_user_mfa(user, 'insecure_example')
+    assert bool(user.mfa_modules) is False
+    assert bool(module.users) is False
+
+    # disable mfa for user don't enabled just silent fail
+    await manager.async_disable_user_mfa(user, 'insecure_example')

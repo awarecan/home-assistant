@@ -18,7 +18,7 @@ async def test_validate(hass):
 
 
 async def test_setup_user(hass):
-    """Test validating pin."""
+    """Test setup user."""
     auth_module = await _auth_module_from_config(hass, {
         'type': 'insecure_example',
         'users': []
@@ -31,6 +31,19 @@ async def test_setup_user(hass):
     user_id = await auth_module.async_validation_flow(
             'test-user', {'pin': '123456'})
     assert user_id == 'test-user'
+
+
+async def test_depose_user(hass):
+    """Test despose user."""
+    auth_module = await _auth_module_from_config(hass, {
+        'type': 'insecure_example',
+        'users': [{'user_id': 'test-user', 'pin': '123456'}]
+    })
+    await auth_module.async_initialize()
+    assert len(auth_module.users) == 1
+
+    await auth_module.async_depose_user('test-user')
+    assert len(auth_module.users) == 0
 
 
 async def test_login(hass):

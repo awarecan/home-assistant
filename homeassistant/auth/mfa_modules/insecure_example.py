@@ -54,8 +54,24 @@ class InsecureExampleModule(MultiFactorAuthModule):
         pin = kwargs.get('pin')
         if not pin:
             raise ValueError('Expected pin in **kwargs')
+        for user in self._users:
+            if user and user.get('user_id') == user_id:
+                # already setup, override
+                user['pin'] = pin
+                return pin
+
         self._users.append({'user_id': user_id, 'pin': pin})
         return pin
+
+    async def async_depose_user(self, user_id):
+        """Depose auth module for user."""
+        found = None
+        for user in self._users:
+            if user and user.get('user_id') == user_id:
+                found = user
+                break
+        if found:
+            self._users.remove(found)
 
     async def async_validation_flow(self, user_id, user_input):
         """Return username if validation passed."""

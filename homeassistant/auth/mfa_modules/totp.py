@@ -70,6 +70,12 @@ class TotpAuthModule(MultiFactorAuthModule):
 
         ota_secret = pyotp.random_base32()
 
+        for user in self.users:
+            if user and user.get('user_id') == user_id:
+                # found user, override ota secret
+                user['ota_secret'] = ota_secret
+                return ota_secret
+
         self.users.append({
             'user_id': user_id,
             'ota_secret': ota_secret
@@ -82,6 +88,17 @@ class TotpAuthModule(MultiFactorAuthModule):
             self.add_ota_secret, user_id)
         await self.async_save()
         return result
+
+    async def async_depose_user(self, user_id):
+        """Depose auth module for user."""
+        found = None
+        for user in self.users:
+            if user and user.get('user_id') == user_id:
+                found = user
+                break
+        if found:
+            self.users.remove(found)
+        await self.async_save()
 
     async def async_validation_flow(self, user_id, user_input):
         """Return username if validation passed."""
