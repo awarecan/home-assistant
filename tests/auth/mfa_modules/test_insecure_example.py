@@ -1,7 +1,6 @@
 """Test the example module auth module."""
 from homeassistant import auth, data_entry_flow
 from homeassistant.auth.mfa_modules import _auth_module_from_config
-from homeassistant.auth.providers import insecure_example as test_auth
 from tests.common import MockUser
 
 

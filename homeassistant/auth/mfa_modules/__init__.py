@@ -126,5 +126,3 @@ async def _auth_module_from_config(hass, config):
         return None
 
     return MULTI_FACTOR_AUTH_MODULES[module_name](hass, config)
-
-
