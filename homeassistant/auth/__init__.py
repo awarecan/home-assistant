@@ -288,11 +288,11 @@ class LoginFlow(data_entry_flow.FlowHandler):
                     async_get_user_by_credentials(credentials)
 
                 if self._user.mfa_modules:
-                    if len(self._user.mfa_modules) > 1:
-                        return await self.async_step_select_mfa_module()
-                    else:
+                    if len(self._user.mfa_modules) == 1:
                         self._auth_module_id = self._user.mfa_modules[0]
                         return await self.async_step_mfa()
+                    # need select mfa module first
+                    return await self.async_step_select_mfa_module()
 
         # new credential or no mfa_module enabled or passed mfa validate
         return self.async_create_entry(
@@ -754,13 +754,13 @@ class AuthStore:
 
     async def async_disable_user_mfa(self, user, mfa_module_id):
         """Disable a mfa module for user."""
-        if mfa_module_id in self._users[user.id].mfa_modules:
-            local_user = await self.async_get_user(user.id)
-            local_user.mfa_modules.remove(mfa_module_id)
-            await self.async_save()
-            return local_user
-        else:
+        if mfa_module_id not in self._users[user.id].mfa_modules:
             return user
+
+        local_user = await self.async_get_user(user.id)
+        local_user.mfa_modules.remove(mfa_module_id)
+        await self.async_save()
+        return local_user
 
     async def async_create_refresh_token(self, user, client_id=None):
         """Create a new token for a user."""

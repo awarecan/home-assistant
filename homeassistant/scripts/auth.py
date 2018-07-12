@@ -138,10 +138,11 @@ async def enable_mfa(auth_manager, data, args):
             {'username': args.username})
         user = await auth_manager.async_get_or_create_user(credential)
         secret = await auth_manager.async_enable_user_mfa(user, 'totp')
-        # FIXME need to wait until AuthStore save finish
         print(
             "Multi-factor auth enabled, please set up Google Authenticator or"
             " any other compatible apps like Authy with key: %s" % secret)
+        # need to stop hass to force AuthStore flash
+        await auth_manager.hass.async_stop()
     except hass_auth.InvalidUser:
         print("User not found")
     except (hass_auth.InvalidAuth, auth.InvalidAuth):
