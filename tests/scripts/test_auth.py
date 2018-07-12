@@ -116,7 +116,7 @@ async def test_validate_login_2fa(auth_manager, data, capsys):
 
     with patch('homeassistant.HomeAssistant.async_stop'):
         await script_auth.enable_mfa(
-            auth_manager, data, 
+            auth_manager, data,
             Mock(username='test-user', password='test-pass'))
     capsys.readouterr()
 
