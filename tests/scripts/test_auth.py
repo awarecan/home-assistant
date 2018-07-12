@@ -20,7 +20,7 @@ def data(hass):
 
 
 @pytest.fixture
-def auth_manager(hass):
+def auth_hass(hass):
     """Setup an auth manager."""
     manager = hass.loop.run_until_complete(
         auth.auth_manager_from_config(
@@ -42,12 +42,12 @@ def auth_manager(hass):
         data={'username': 'test-user'},
         is_new=False,
     ))
-    return manager
+    return hass
 
 
-async def test_list_user(auth_manager, data, capsys):
+async def test_list_user(auth_hass, data, capsys):
     """Test we can list users."""
-    await script_auth.list_users(auth_manager, None, Mock(all=False))
+    await script_auth.list_users(auth_hass, None, Mock(all=False))
 
     captured = capsys.readouterr()
 
@@ -58,7 +58,7 @@ async def test_list_user(auth_manager, data, capsys):
         ''
     ])
 
-    await script_auth.list_users(auth_manager, None, Mock(all=True))
+    await script_auth.list_users(auth_hass, None, Mock(all=True))
 
     captured = capsys.readouterr()
 
@@ -74,10 +74,10 @@ async def test_list_user(auth_manager, data, capsys):
     ])
 
 
-async def test_add_user(data, capsys, hass_storage):
+async def test_add_user(auth_hass, data, capsys, hass_storage):
     """Test we can add a user."""
     await script_auth.add_user(
-        None, data, Mock(username='paulus', password='test-pass'))
+        auth_hass, data, Mock(username='paulus', password='test-pass'))
 
     assert len(hass_storage[hass_auth.STORAGE_KEY]['data']['users']) == 1
 
@@ -88,77 +88,78 @@ async def test_add_user(data, capsys, hass_storage):
     data.validate_login('paulus', 'test-pass')
 
 
-async def test_validate_login(auth_manager, data, capsys):
+async def test_validate_login(auth_hass, data, capsys):
     """Test we can validate a user login."""
     data.add_user('test-user', 'test-pass')
 
     await script_auth.validate_login(
-        auth_manager, data,
+        auth_hass, data,
         Mock(username='test-user', password='test-pass', code=None))
     captured = capsys.readouterr()
     assert captured.out == 'Auth valid\n'
 
     await script_auth.validate_login(
-        auth_manager, data,
+        auth_hass, data,
         Mock(username='test-user', password='invalid-pass', code=None))
     captured = capsys.readouterr()
     assert captured.out == 'Auth invalid\n'
 
     await script_auth.validate_login(
-        auth_manager, data,
+        auth_hass, data,
         Mock(username='invalid-user', password='test-pass', code=None))
     captured = capsys.readouterr()
     assert captured.out == 'Auth invalid\n'
 
 
-async def test_validate_login_2fa(auth_manager, data, capsys):
+async def test_validate_login_2fa(auth_hass, data, capsys):
     """Test we can validate a user login."""
     data.add_user('test-user', 'test-pass')
 
-    with patch.object(auth_manager.hass, 'async_stop') as mock:
+    with patch.object(auth_hass, 'async_stop') as mock:
         future = asyncio.Future()
         future.set_result(True)
         mock.return_value = future
         await script_auth.enable_mfa(
-            auth_manager, data,
+            auth_hass, data,
             Mock(username='test-user', password='test-pass'))
     capsys.readouterr()
 
     with patch('pyotp.TOTP.verify', return_value=True):
         await script_auth.validate_login(
-            auth_manager, data,
+            auth_hass, data,
             Mock(username='test-user', password='test-pass', code='code'))
         captured = capsys.readouterr()
         assert captured.out == 'Auth valid\n'
 
     with patch('pyotp.TOTP.verify', return_value=True):
         await script_auth.validate_login(
-            auth_manager, data,
+            auth_hass, data,
             Mock(username='test-user', password='invalid-pass', code='code'))
         captured = capsys.readouterr()
         assert captured.out == 'Auth invalid\n'
 
     with patch('pyotp.TOTP.verify', return_value=True):
         await script_auth.validate_login(
-            auth_manager, data,
+            auth_hass, data,
             Mock(username='invalid-user', password='test-pass', code='code'))
         captured = capsys.readouterr()
         assert captured.out == 'Auth invalid\n'
 
     with patch('pyotp.TOTP.verify', return_value=False):
         await script_auth.validate_login(
-            auth_manager, data,
+            auth_hass, data,
             Mock(username='test-user', password='test-pass', code='invalid'))
         captured = capsys.readouterr()
         assert captured.out == 'Auth invalid\n'
 
 
-async def test_change_password(data, capsys, hass_storage):
+async def test_change_password(auth_hass, data, capsys, hass_storage):
     """Test we can change a password."""
     data.add_user('test-user', 'test-pass')
 
     await script_auth.change_password(
-        None, data, Mock(username='test-user', new_password='new-pass'))
+        auth_hass, data,
+        Mock(username='test-user', new_password='new-pass'))
 
     assert len(hass_storage[hass_auth.STORAGE_KEY]['data']['users']) == 1
     captured = capsys.readouterr()
@@ -168,12 +169,14 @@ async def test_change_password(data, capsys, hass_storage):
         data.validate_login('test-user', 'test-pass')
 
 
-async def test_change_password_invalid_user(data, capsys, hass_storage):
+async def test_change_password_invalid_user(auth_hass, data,
+                                            capsys, hass_storage):
     """Test changing password of non-existing user."""
     data.add_user('test-user', 'test-pass')
 
     await script_auth.change_password(
-        None, data, Mock(username='invalid-user', new_password='new-pass'))
+        auth_hass, data,
+        Mock(username='invalid-user', new_password='new-pass'))
 
     assert hass_auth.STORAGE_KEY not in hass_storage
     captured = capsys.readouterr()
@@ -183,16 +186,16 @@ async def test_change_password_invalid_user(data, capsys, hass_storage):
         data.validate_login('invalid-user', 'new-pass')
 
 
-async def test_enable_mfa(auth_manager, data, capsys):
+async def test_enable_mfa(auth_hass, data, capsys):
     """Test we can change a password."""
     data.add_user('test-user', 'test-pass')
 
-    with patch.object(auth_manager.hass, 'async_stop') as mock:
+    with patch.object(auth_hass, 'async_stop') as mock:
         future = asyncio.Future()
         future.set_result(True)
         mock.return_value = future
         await script_auth.enable_mfa(
-            auth_manager, data,
+            auth_hass, data,
             Mock(username='test-user', password='test-pass'))
 
     captured = capsys.readouterr()
@@ -203,11 +206,11 @@ def test_parsing_args(loop):
     """Test we parse args correctly."""
     called = False
 
-    async def mock_func(auth_manager, data, args2):
+    async def mock_func(auth_hass, data, args2):
         """Mock function to be called."""
         nonlocal called
         called = True
-        assert auth_manager.hass.config.config_dir == '/somewhere/config'
+        assert auth_hass.config.config_dir == '/somewhere/config'
         assert data.hass.config.config_dir == '/somewhere/config'
         assert args2 is args
 

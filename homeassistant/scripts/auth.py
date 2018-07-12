@@ -60,15 +60,15 @@ def run(args):
 
     data = hass_auth.Data(hass)
     loop.run_until_complete(data.async_load())
-    loop.run_until_complete(args.func(hass.auth, data, args))
+    loop.run_until_complete(args.func(hass, data, args))
 
 
-async def list_users(auth_manager, data, args):
+async def list_users(hass, data, args):
     """List the users."""
     count = 0
     if args.all:
         # pylint: disable=protected-access
-        for user in await auth_manager._store.async_get_users():
+        for user in await hass.auth._store.async_get_users():
             print("{}{}{}".format(
                 str(user.name).ljust(20),
                 str(user.id).ljust(34),
@@ -79,7 +79,7 @@ async def list_users(auth_manager, data, args):
                 print("  - {}".format(cred.data.get('username')))
 
     else:
-        provider = list(auth_manager.async_auth_providers)[0]
+        provider = list(hass.auth.async_auth_providers)[0]
         for user in await provider.async_credentials():
             count += 1
             print(user.data.get('username'))
@@ -88,24 +88,24 @@ async def list_users(auth_manager, data, args):
     print("Total users:", count)
 
 
-async def add_user(auth_manager, data, args):
+async def add_user(hass, data, args):
     """Create a user."""
     data.add_user(args.username, args.password)
     await data.async_save()
     print("User created")
 
 
-async def validate_login(auth_manager, data, args):
+async def validate_login(hass, data, args):
     """Validate a login."""
     try:
         data.validate_login(args.username, args.password)
         if args.code:
-            provider = list(auth_manager.async_auth_providers)[0]
+            provider = list(hass.auth.async_auth_providers)[0]
             credential = await provider.async_get_or_create_credentials(
                 {'username': args.username})
-            user = await auth_manager.async_get_or_create_user(credential)
+            user = await hass.auth.async_get_or_create_user(credential)
 
-            module = await auth_manager.async_get_auth_module('totp')
+            module = await hass.auth.async_get_auth_module('totp')
             result = await module.async_validation_flow(
                 user.id, {'code': args.code})
             if result is not None:
@@ -118,7 +118,7 @@ async def validate_login(auth_manager, data, args):
         print("Auth invalid")
 
 
-async def change_password(auth_manager, data, args):
+async def change_password(hass, data, args):
     """Change password."""
     try:
         data.change_password(args.username, args.new_password)
@@ -128,21 +128,21 @@ async def change_password(auth_manager, data, args):
         print("User not found")
 
 
-async def enable_mfa(auth_manager, data, args):
+async def enable_mfa(hass, data, args):
     """Enable mfa for user."""
     try:
         data.validate_login(args.username, args.password)
 
-        provider = list(auth_manager.async_auth_providers)[0]
+        provider = list(hass.auth.async_auth_providers)[0]
         credential = await provider.async_get_or_create_credentials(
             {'username': args.username})
-        user = await auth_manager.async_get_or_create_user(credential)
-        secret = await auth_manager.async_enable_user_mfa(user, 'totp')
+        user = await hass.auth.async_get_or_create_user(credential)
+        secret = await hass.auth.async_enable_user_mfa(user, 'totp')
         print(
             "Multi-factor auth enabled, please set up Google Authenticator or"
             " any other compatible apps like Authy with key: %s" % secret)
         # need to stop hass to force AuthStore flash
-        await auth_manager.hass.async_stop()
+        await hass.async_stop()
     except auth.InvalidUser:
         print("User not found")
     except auth.InvalidAuth:
