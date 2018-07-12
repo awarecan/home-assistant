@@ -24,9 +24,9 @@ _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 STORAGE_KEY = 'auth'
 
-AUTH_MODULES = Registry()
+MUTLFACTOR_AUTH_MODULES = Registry()
 
-AUTH_MODULE_SCHEMA = vol.Schema({
+MUTLFACTOR_AUTH_MODULE_SCHEMA = vol.Schema({
     vol.Required(CONF_TYPE): str,
     vol.Optional(CONF_NAME): str,
     # Specify ID if you have two auth module for same type.
@@ -61,8 +61,8 @@ class InvalidAuth(HomeAssistantError):
     """Raised when we encounter invalid authentication."""
 
 
-class AuthModule:
-    """Provider of validation function."""
+class MultiFactorAuthModule:
+    """Multi-factor Auth Module of validation function."""
 
     DEFAULT_TITLE = 'Unnamed auth module'
 
@@ -486,7 +486,7 @@ async def _auth_module_from_config(hass, config):
                       module_name, humanize_error(config, err))
         return None
 
-    return AUTH_MODULES[module_name](hass, config)
+    return MUTLFACTOR_AUTH_MODULES[module_name](hass, config)
 
 
 class AuthManager:

@@ -161,7 +161,7 @@ CORE_CONFIG_SCHEMA = CUSTOMIZE_CONFIG_SCHEMA.extend({
     vol.Optional(CONF_AUTH_PROVIDERS):
         vol.All(cv.ensure_list, [auth.AUTH_PROVIDER_SCHEMA]),
     vol.Optional(CONF_AUTH_MFA_MODULES):
-        vol.All(cv.ensure_list, [auth.AUTH_MODULE_SCHEMA]),
+        vol.All(cv.ensure_list, [auth.MUTLFACTOR_AUTH_MODULE_SCHEMA]),
 })
 
 

@@ -19,8 +19,8 @@ STORAGE_KEY = 'auth_module.insecure_example'
 _LOGGER = logging.getLogger(__name__)
 
 
-@auth.AUTH_MODULES.register('insecure_example')
-class InsecureExampleModule(auth.AuthModule):
+@auth.MUTLFACTOR_AUTH_MODULES.register('insecure_example')
+class InsecureExampleModule(auth.MultiFactorAuthModule):
     """Example auth module validate pin."""
 
     DEFAULT_TITLE = 'Personal Identify Number'

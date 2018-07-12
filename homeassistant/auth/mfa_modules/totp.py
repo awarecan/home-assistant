@@ -8,7 +8,7 @@ from homeassistant import auth
 
 REQUIREMENTS = ['pyotp==2.2.6']
 
-CONFIG_SCHEMA = auth.AUTH_MODULE_SCHEMA.extend({
+CONFIG_SCHEMA = auth.MUTLFACTOR_AUTH_MODULE_SCHEMA.extend({
 }, extra=vol.PREVENT_EXTRA)
 
 STORAGE_VERSION = 1
@@ -17,8 +17,8 @@ STORAGE_KEY = 'auth_module.totp'
 _LOGGER = logging.getLogger(__name__)
 
 
-@auth.AUTH_MODULES.register('totp')
-class TotpAuthModule(auth.AuthModule):
+@auth.MUTLFACTOR_AUTH_MODULES.register('totp')
+class TotpAuthModule(auth.MultiFactorAuthModule):
     """Auth module validate time-based one time password."""
 
     DEFAULT_TITLE = 'Time-based One Time Password'
