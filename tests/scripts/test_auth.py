@@ -1,4 +1,5 @@
 """Test the auth script to manage local users."""
+import asyncio
 from unittest.mock import Mock, patch
 
 import pytest
@@ -114,7 +115,10 @@ async def test_validate_login_2fa(auth_manager, data, capsys):
     """Test we can validate a user login."""
     data.add_user('test-user', 'test-pass')
 
-    with patch.object(auth_manager.hass, 'async_stop'):
+    with patch.object(auth_manager.hass, 'async_stop') as mock:
+        future = asyncio.Future()
+        future.set_result(True)
+        mock.return_value = future
         await script_auth.enable_mfa(
             auth_manager, data,
             Mock(username='test-user', password='test-pass'))
@@ -183,7 +187,10 @@ async def test_enable_mfa(auth_manager, data, capsys):
     """Test we can change a password."""
     data.add_user('test-user', 'test-pass')
 
-    with patch.object(auth_manager.hass, 'async_stop'):
+    with patch.object(auth_manager.hass, 'async_stop') as mock:
+        future = asyncio.Future()
+        future.set_result(True)
+        mock.return_value = future
         await script_auth.enable_mfa(
             auth_manager, data,
             Mock(username='test-user', password='test-pass'))
