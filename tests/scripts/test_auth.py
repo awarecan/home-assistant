@@ -114,7 +114,7 @@ async def test_validate_login_2fa(auth_manager, data, capsys):
     """Test we can validate a user login."""
     data.add_user('test-user', 'test-pass')
 
-    with patch('homeassistant.HomeAssistant.async_stop'):
+    with patch.object(auth_manager.hass, 'async_stop'):
         await script_auth.enable_mfa(
             auth_manager, data,
             Mock(username='test-user', password='test-pass'))
@@ -183,7 +183,7 @@ async def test_enable_mfa(auth_manager, data, capsys):
     """Test we can change a password."""
     data.add_user('test-user', 'test-pass')
 
-    with patch('homeassistant.HomeAssistant.async_stop'):
+    with patch.object(auth_manager.hass, 'async_stop'):
         await script_auth.enable_mfa(
             auth_manager, data,
             Mock(username='test-user', password='test-pass'))
