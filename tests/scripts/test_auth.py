@@ -114,8 +114,10 @@ async def test_validate_login_2fa(auth_manager, data, capsys):
     """Test we can validate a user login."""
     data.add_user('test-user', 'test-pass')
 
-    await script_auth.enable_mfa(
-        auth_manager, data, Mock(username='test-user', password='test-pass'))
+    with patch('homeassistant.HomeAssistant.async_stop'):
+        await script_auth.enable_mfa(
+            auth_manager, data, 
+            Mock(username='test-user', password='test-pass'))
     capsys.readouterr()
 
     with patch('pyotp.TOTP.verify', return_value=True):
@@ -181,8 +183,10 @@ async def test_enable_mfa(auth_manager, data, capsys):
     """Test we can change a password."""
     data.add_user('test-user', 'test-pass')
 
-    await script_auth.enable_mfa(
-        auth_manager, data, Mock(username='test-user', password='test-pass'))
+    with patch('homeassistant.HomeAssistant.async_stop'):
+        await script_auth.enable_mfa(
+            auth_manager, data,
+            Mock(username='test-user', password='test-pass'))
 
     captured = capsys.readouterr()
     assert 'Multi-factor auth enabled' in captured.out
