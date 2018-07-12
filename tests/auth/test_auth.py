@@ -545,7 +545,7 @@ async def test_auth_module_expired_session(mock_hass):
     with patch('homeassistant.util.dt.utcnow') as mock_now:
         from homeassistant.auth.mfa_modules import SESSION_EXPIRATION
         mock_now.return_value = datetime.now(dt_util.UTC)\
-                                + SESSION_EXPIRATION * 2
+            + SESSION_EXPIRATION * 2
         step = await manager.login_flow.async_configure(step['flow_id'], {
             'pin': 'test-pin',
         })
