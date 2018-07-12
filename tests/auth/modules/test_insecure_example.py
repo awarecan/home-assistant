@@ -35,7 +35,7 @@ async def test_setup_user(hass):
 
 async def test_login(hass):
     """Test login flow with auth module."""
-    hass.auth: auth.AuthManager = await auth.auth_manager_from_config(hass, [{
+    hass.auth = await auth.auth_manager_from_config(hass, [{
         'type': 'insecure_example',
         'users': [{'username': 'test-user', 'password': 'test-pass'}],
     }], [{

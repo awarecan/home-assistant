@@ -20,7 +20,7 @@ def data(hass):
 
 @pytest.fixture
 def auth_manager(hass):
-    """Setup an auth manager"""
+    """Setup an auth manager."""
     manager = hass.loop.run_until_complete(
         auth.auth_manager_from_config(
             hass, [{'type': 'homeassistant'}], [{'type': 'totp'}]))

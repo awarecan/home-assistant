@@ -53,7 +53,7 @@ async def test_validating_2fa_invalid_user(hass):
 
 async def test_login_flow_validates_2fa(hass):
     """Test login flow with 2fa enabled."""
-    hass.auth: auth.AuthManager = await auth.auth_manager_from_config(hass, [{
+    hass.auth = await auth.auth_manager_from_config(hass, [{
         'type': 'insecure_example',
         'users': [{'username': 'test-user', 'password': 'test-pass'}],
     }], [{
