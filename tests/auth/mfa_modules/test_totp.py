@@ -1,4 +1,4 @@
-"""Test the Time-based One Time Password (2FA) auth module."""
+"""Test the Time-based One Time Password (MFA) auth module."""
 from unittest.mock import patch
 
 import pytest
@@ -10,8 +10,8 @@ from tests.common import MockUser
 MOCK_CODE = '123456'
 
 
-async def test_validating_2fa(hass):
-    """Test validating 2fa code."""
+async def test_validating_mfa(hass):
+    """Test validating mfa code."""
     totp_auth_module = await auth._auth_module_from_config(hass, {
         'type': 'totp'
     })
@@ -24,8 +24,8 @@ async def test_validating_2fa(hass):
         assert user_id == 'test-user'
 
 
-async def test_validating_2fa_invalid_code(hass):
-    """Test validating an invalid 2fa code."""
+async def test_validating_mfa_invalid_code(hass):
+    """Test validating an invalid mfa code."""
     totp_auth_module = await auth._auth_module_from_config(hass, {
         'type': 'totp'
     })
@@ -38,8 +38,8 @@ async def test_validating_2fa_invalid_code(hass):
                 'test-user', {'code': MOCK_CODE})
 
 
-async def test_validating_2fa_invalid_user(hass):
-    """Test validating an 2fa code with invalid user."""
+async def test_validating_mfa_invalid_user(hass):
+    """Test validating an mfa code with invalid user."""
     totp_auth_module = await auth._auth_module_from_config(hass, {
         'type': 'totp'
     })
@@ -51,8 +51,8 @@ async def test_validating_2fa_invalid_user(hass):
             'invalid-user', {'code': MOCK_CODE})
 
 
-async def test_login_flow_validates_2fa(hass):
-    """Test login flow with 2fa enabled."""
+async def test_login_flow_validates_mfa(hass):
+    """Test login flow with mfa enabled."""
     hass.auth = await auth.auth_manager_from_config(hass, [{
         'type': 'insecure_example',
         'users': [{'username': 'test-user', 'password': 'test-pass'}],
