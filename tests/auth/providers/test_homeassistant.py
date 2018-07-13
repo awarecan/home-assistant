@@ -4,7 +4,8 @@ from unittest.mock import Mock
 import pytest
 
 from homeassistant import data_entry_flow, auth
-from homeassistant.auth.providers import homeassistant as hass_auth
+from homeassistant.auth.providers import homeassistant as hass_auth, \
+    _auth_provider_from_config
 
 
 @pytest.fixture
@@ -108,7 +109,7 @@ async def test_saving_loading(data, hass):
 async def test_not_allow_set_id():
     """Test we are not allowed to set an ID in config."""
     hass = Mock()
-    provider = await auth._auth_provider_from_config(hass, None, {
+    provider = await _auth_provider_from_config(hass, None, {
         'type': 'homeassistant',
         'id': 'invalid',
     })

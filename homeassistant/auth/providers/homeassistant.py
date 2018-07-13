@@ -139,6 +139,8 @@ class HassAuthProvider(AuthProvider):
 
     initialized = False
 
+    data = None
+
     async def _async_initialize(self):
         """Initialize the auth provider."""
         self.data = Data(self.hass)

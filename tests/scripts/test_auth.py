@@ -76,8 +76,12 @@ async def test_list_user(auth_hass, data, capsys):
 
 async def test_add_user(auth_hass, data, capsys, hass_storage):
     """Test we can add a user."""
-    await script_auth.add_user(
-        auth_hass, data, Mock(username='paulus', password='test-pass'))
+    with patch.object(auth_hass, 'async_stop') as mock:
+        future = asyncio.Future()
+        future.set_result(True)
+        mock.return_value = future
+        await script_auth.add_user(
+            auth_hass, data, Mock(username='paulus', password='test-pass'))
 
     assert len(hass_storage[hass_auth.STORAGE_KEY]['data']['users']) == 1
 
