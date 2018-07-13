@@ -44,7 +44,7 @@ async def test_auth_manager_from_config_validates_config_and_id(mock_hass):
             'name': provider.name,
             'id': provider.id,
             'type': provider.type,
-        } for provider in manager.async_auth_providers]
+        } for provider in manager.auth_providers]
     assert providers == [{
         'name': 'Test Name',
         'type': 'insecure_example',
@@ -87,7 +87,7 @@ async def test_auth_manager_from_config_auth_modules(mock_hass):
             'name': provider.name,
             'type': provider.type,
             'id': provider.id,
-        } for provider in manager.async_auth_providers]
+        } for provider in manager.auth_providers]
     assert providers == [{
         'name': 'Test Name',
         'type': 'insecure_example',
@@ -102,7 +102,7 @@ async def test_auth_manager_from_config_auth_modules(mock_hass):
             'name': module.name,
             'type': module.type,
             'id': module.id,
-        } for module in manager.async_auth_modules]
+        } for module in manager.auth_mfa_modules]
     assert modules == [{
         'name': 'Module 1',
         'type': 'insecure_example',

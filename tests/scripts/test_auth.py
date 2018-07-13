@@ -90,7 +90,7 @@ async def test_add_user(auth_hass, data, capsys, hass_storage):
 
 async def test_validate_login(auth_hass, data, capsys):
     """Test we can validate a user login."""
-    data.add_user('test-user', 'test-pass')
+    data.add_auth('test-user', 'test-pass')
 
     await script_auth.validate_login(
         auth_hass, data,
@@ -113,7 +113,7 @@ async def test_validate_login(auth_hass, data, capsys):
 
 async def test_validate_login_2fa(auth_hass, data, capsys):
     """Test we can validate a user login."""
-    data.add_user('test-user', 'test-pass')
+    data.add_auth('test-user', 'test-pass')
 
     with patch.object(auth_hass, 'async_stop') as mock:
         future = asyncio.Future()
@@ -155,7 +155,7 @@ async def test_validate_login_2fa(auth_hass, data, capsys):
 
 async def test_change_password(auth_hass, data, capsys, hass_storage):
     """Test we can change a password."""
-    data.add_user('test-user', 'test-pass')
+    data.add_auth('test-user', 'test-pass')
 
     await script_auth.change_password(
         auth_hass, data,
@@ -172,7 +172,7 @@ async def test_change_password(auth_hass, data, capsys, hass_storage):
 async def test_change_password_invalid_user(auth_hass, data,
                                             capsys, hass_storage):
     """Test changing password of non-existing user."""
-    data.add_user('test-user', 'test-pass')
+    data.add_auth('test-user', 'test-pass')
 
     await script_auth.change_password(
         auth_hass, data,
@@ -188,7 +188,7 @@ async def test_change_password_invalid_user(auth_hass, data,
 
 async def test_enable_mfa(auth_hass, data, capsys):
     """Test we can change a password."""
-    data.add_user('test-user', 'test-pass')
+    data.add_auth('test-user', 'test-pass')
 
     with patch.object(auth_hass, 'async_stop') as mock:
         future = asyncio.Future()

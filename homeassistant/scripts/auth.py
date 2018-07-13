@@ -79,7 +79,7 @@ async def list_users(hass, data, args):
                 print("  - {}".format(cred.data.get('username')))
 
     else:
-        provider = list(hass.auth.async_auth_providers)[0]
+        provider = hass.auth.auth_providers[0]
         for user in await provider.async_credentials():
             count += 1
             print(user.data.get('username'))
@@ -90,8 +90,17 @@ async def list_users(hass, data, args):
 
 async def add_user(hass, data, args):
     """Create a user."""
-    data.add_user(args.username, args.password)
+    data.add_auth(args.username, args.password)
     await data.async_save()
+
+    provider = hass.auth.auth_providers[0]
+    credential = await provider.async_get_or_create_credentials(
+        {'username': args.username})
+    await hass.auth.async_get_or_create_user(credential)
+
+    # Flush AuthStore
+    await hass.async_stop()
+
     print("User created")
 
 
@@ -100,7 +109,7 @@ async def validate_login(hass, data, args):
     try:
         data.validate_login(args.username, args.password)
         if args.code:
-            provider = list(hass.auth.async_auth_providers)[0]
+            provider = hass.auth.auth_providers[0]
             credential = await provider.async_get_or_create_credentials(
                 {'username': args.username})
             user = await hass.auth.async_get_or_create_user(credential)
@@ -133,7 +142,7 @@ async def enable_mfa(hass, data, args):
     try:
         data.validate_login(args.username, args.password)
 
-        provider = list(hass.auth.async_auth_providers)[0]
+        provider = hass.auth.auth_providers[0]
         credential = await provider.async_get_or_create_credentials(
             {'username': args.username})
         user = await hass.auth.async_get_or_create_user(credential)
@@ -141,7 +150,7 @@ async def enable_mfa(hass, data, args):
         print(
             "Multi-factor auth enabled, please set up Google Authenticator or"
             " any other compatible apps like Authy with key: %s" % secret)
-        # need to stop hass to force AuthStore flash
+        # Flush AuthStore
         await hass.async_stop()
     except auth.InvalidUser:
         print("User not found")

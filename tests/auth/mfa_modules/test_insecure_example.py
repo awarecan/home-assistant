@@ -70,7 +70,7 @@ async def test_login(hass):
         is_new=False,
     ))
 
-    provider = list(hass.auth.async_auth_providers)[0]
+    provider = hass.auth.auth_providers[0]
     flow = await provider.async_login_flow()
 
     result = await flow.async_step_init()

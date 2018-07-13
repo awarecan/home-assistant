@@ -21,7 +21,7 @@ AUTH_PROVIDER_SCHEMA = vol.Schema({
     vol.Optional(CONF_NAME): str,
     # Specify ID if you have two auth providers for same type.
     vol.Optional(CONF_ID): str,
-}, extra=vol.ALLOW_EXTRA)
+})
 
 DATA_REQS = 'auth_provdier_reqs_processed'
 
@@ -32,8 +32,6 @@ class AuthProvider:
     """Provider of user authentication."""
 
     DEFAULT_TITLE = 'Unnamed auth provider'
-
-    initialized = False
 
     def __init__(self, hass, store, config):
         """Initialize an auth provider."""
@@ -80,12 +78,6 @@ class AuthProvider:
         )
 
     # Implement by extending class
-
-    async def async_initialize(self):
-        """Initialize the auth provider.
-
-        Optional.
-        """
 
     async def async_login_flow(self):
         """Return the data flow for logging in with auth provider.

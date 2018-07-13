@@ -197,12 +197,12 @@ class AuthManager:
         return False
 
     @property
-    def async_auth_providers(self):
+    def auth_providers(self):
         """Return a list of available auth providers."""
-        return self._providers.values()
+        return list(self._providers.values())
 
     @property
-    def async_auth_modules(self):
+    def auth_mfa_modules(self):
         """Return a list of available auth modules."""
         return self._mfa_modules.values()
 
@@ -214,9 +214,22 @@ class AuthManager:
             await module.async_initialize()
         return module
 
+    async def async_get_users(self):
+        """Retrieve all users."""
+        return await self._store.async_get_users()
+
     async def async_get_user(self, user_id):
         """Retrieve a user."""
         return await self._store.async_get_user(user_id)
+
+    async def async_get_user_by_credentials(self, credentials):
+        """Get a user by credential, raise ValueError if not found."""
+        for user in await self.async_get_users():
+            for creds in user.credentials:
+                if creds.id == credentials.id:
+                    return user
+
+        raise ValueError('Unable to find the user.')
 
     async def async_create_system_user(self, name):
         """Create a system user."""
@@ -226,15 +239,12 @@ class AuthManager:
             is_active=True,
         )
 
-    async def async_get_user_by_credentials(self, credentials):
-        """Get a user by credential, raise ValueError if not found."""
-        for user in await self._store.async_get_users():
-
-            for creds in user.credentials:
-                if creds.id == credentials.id:
-                    return user
-
-        raise ValueError('Unable to find the user.')
+    async def async_create_user(self, name):
+        """Create a user."""
+        return await self._store.async_create_user(
+            name=name,
+            is_active=True,
+        )
 
     async def async_get_or_create_user(self, credentials):
         """Get or create a user."""
@@ -242,6 +252,10 @@ class AuthManager:
             return await self.async_get_user_by_credentials(credentials)
 
         auth_provider = self._async_get_auth_provider(credentials)
+
+        if auth_provider is None:
+            raise RuntimeError('Credential with unknown provider encountered')
+
         info = await auth_provider.async_user_meta_for_credentials(
             credentials)
 
@@ -266,7 +280,24 @@ class AuthManager:
 
     async def async_remove_user(self, user):
         """Remove a user."""
+        tasks = [
+            self.async_remove_credentials(credentials)
+            for credentials in user.credentials
+        ]
+
+        if tasks:
+            await asyncio.wait(tasks)
         await self._store.async_remove_user(user)
+
+    async def async_remove_credentials(self, credentials):
+        """Remove credentials."""
+        provider = self._async_get_auth_provider(credentials)
+
+        if (provider is not None and
+                hasattr(provider, 'async_will_remove_credentials')):
+            await provider.async_will_remove_credentials(credentials)
+
+        await self._store.async_remove_credentials(credentials)
 
     async def async_enable_user_mfa(self, user, mfa_module_id, **kwargs):
         """Enable a multi-factor auth module for user."""
@@ -338,13 +369,7 @@ class AuthManager:
     async def _async_create_login_flow(self, handler, *, source, data):
         """Create a login flow."""
         auth_provider = self._providers[handler]
-
-        if not auth_provider.initialized:
-            auth_provider.initialized = True
-            await auth_provider.async_initialize()
-
-        login_flow = await auth_provider.async_login_flow()
-        return login_flow
+        return await auth_provider.async_login_flow()
 
     async def _async_finish_login_flow(self, result):
         """Result of a credential login flow."""
@@ -360,7 +385,7 @@ class AuthManager:
         """Helper to get auth provider from a set of credentials."""
         auth_provider_key = (credentials.auth_provider_type,
                              credentials.auth_provider_id)
-        return self._providers[auth_provider_key]
+        return self._providers.get(auth_provider_key)
 
 
 class AuthStore:
@@ -432,6 +457,22 @@ class AuthStore:
     async def async_remove_user(self, user):
         """Remove a user."""
         self._users.pop(user.id)
+        await self.async_save()
+
+    async def async_remove_credentials(self, credentials):
+        """Remove credentials."""
+        for user in self._users.values():
+            found = None
+
+            for index, cred in enumerate(user.credentials):
+                if cred is credentials:
+                    found = index
+                    break
+
+            if found is not None:
+                user.credentials.pop(found)
+                break
+
         await self.async_save()
 
     async def async_enable_user_mfa(self, user, mfa_module_id):

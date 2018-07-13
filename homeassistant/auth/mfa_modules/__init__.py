@@ -17,7 +17,7 @@ MULTI_FACTOR_AUTH_MODULE_SCHEMA = vol.Schema({
     vol.Optional(CONF_NAME): str,
     # Specify ID if you have two auth module for same type.
     vol.Optional(CONF_ID): str,
-}, extra=vol.ALLOW_EXTRA)
+})
 
 SESSION_EXPIRATION = timedelta(minutes=5)
 

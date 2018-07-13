@@ -311,12 +311,12 @@ def mock_registry(hass, mock_entries=None):
 class MockUser(auth.User):
     """Mock a user in Home Assistant."""
 
-    def __init__(self, id='mock-id', is_owner=True, is_active=True,
-                 name='Mock User', mfa_modules=None):
+    def __init__(self, id='mock-id', is_owner=False, is_active=True,
+                 name='Mock User', system_generated=False, mfa_modules=None):
         """Initialize mock user."""
         super().__init__(
             id=id, is_owner=is_owner, is_active=is_active, name=name,
-            mfa_modules=mfa_modules)
+            system_generated=system_generated, mfa_modules=mfa_modules)
 
     def add_to_hass(self, hass):
         """Test helper to add entry to hass."""
