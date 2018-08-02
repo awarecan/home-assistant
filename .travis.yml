@@ -3,6 +3,7 @@ addons:
   apt:
     packages:
       - libudev-dev
+
 matrix:
   fast_finish: true
   include:
@@ -26,6 +27,11 @@ matrix:
     - python: "3.6"
       env: TOXENV=py36
       dist: trusty
+      addons:
+        sonarcloud:
+          organization: "awarecan-github"
+      script:
+        - sonar-scanner
   allow_failures:
     - python: "3.8-dev"
       env: TOXENV=py38
