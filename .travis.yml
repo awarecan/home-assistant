@@ -23,6 +23,9 @@ matrix:
       env: TOXENV=py38
       dist: xenial
       if: branch = dev AND type = push
+    - python: "3.6"
+      env: TOXENV=py36
+      dist: trusty
   allow_failures:
     - python: "3.8-dev"
       env: TOXENV=py38
